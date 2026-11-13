@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.pid
+.vscode/
+.idea/
+fota_acs_traffic.log
+fota_dns_queries.log
+fota_http_portal.log
+fota_device_params.json
+fota_update_found.json
+device_credentials.json
+fota_firmware_url.txt

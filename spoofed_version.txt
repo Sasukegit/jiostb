@@ -1,0 +1,12 @@
+# Set the software version to spoof when querying or MITM-ing Jio ACS.
+# The lab will use the first non-comment line below.
+#
+# Presets based on your box model:
+# -------------------------------------------------------------
+# JHS D200 v2 / v5 (Android 11 / DIN995):  STB-JHSD200-11.1.0  (Offers 11.3.46)
+# JHS D200 v1 (Android 9 / Droidlogic):     STB-JHSD200-5.6.8   (Offers 5.7.1)
+# JHS C200 (Android 9 / SDMC):             STB-JHSC200-5.6.8   (Offers 5.7.1)
+# JMSB200A / JMSD200A (JioAirFiber):       24.1.39             (Offers 25.1.9)
+# -------------------------------------------------------------
+
+STB-JHSD200-11.1.0

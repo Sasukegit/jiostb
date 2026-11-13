@@ -1,0 +1,13 @@
+@echo off
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Requesting Administrator privileges...
+    powershell -NoProfile -Command "Start-Process cmd.exe -ArgumentList '/c \"\"%~f0\"\"' -Verb RunAs"
+    exit /b
+)
+cd /d "%~dp0"
+echo ==========================================================
+echo Starting Jio STB Firmware Capture Lab (Wi-Fi Hotspot MITM)
+echo ==========================================================
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start-wifi-lab.ps1"
+pause
