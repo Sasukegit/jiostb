@@ -124,7 +124,7 @@ adb shell getprop ro.build.version.release # e.g. 11 or 9
   ```
 
 #### 3. Commercial Ads & Telemetry Stripping
-Disable startup intro promo ads, telemetry, and background trackers:
+Disable startup intro promo ads, telemetry, background trackers, and data collectors:
 ```bash
 adb shell pm uninstall -k --user 0 com.jio.stbadservice
 adb shell pm disable-user --user 0 com.jio.bioscopecontentservice
@@ -132,31 +132,45 @@ adb shell pm disable-user --user 0 com.jio.screensaver
 adb shell pm disable-user --user 0 com.jio.jiobackgroundscheduler
 adb shell pm disable-user --user 0 com.jio.appoptimizer
 adb shell pm disable-user --user 0 com.jio.userfeedback
+adb shell pm disable-user --user 0 com.jio.adc.embedded          # Jio ADC embedded data collector
+adb shell pm disable-user --user 0 com.jio.android.jiolauncher  # Jio Patchwall home
 ```
 
-#### 4. JioStore Management (Debloat or Keep)
+#### 4. System Visual Enhancement (Permanent Dark Mode)
+```bash
+adb shell cmd uimode night yes
+adb shell settings put secure ui_night_mode 2
+```
+
+#### 5. JioStore Management (Debloat or Keep)
 * If the user wants a clean, de-Jio'd setup without the bloat of JioStore:
   ```bash
   adb shell pm disable-user --user 0 com.jio.media.stb.jiostore
+  adb shell pm disable-user --user 0 com.jio.store
   ```
 * Sideload **Aurora Store** (`apks/AuroraStore_4.8.4.apk`) as an open-source Google Play client for direct TV app downloads without requiring Google Mobile Services (GMS).
 
-#### 5. Clean TV Launcher Sideload & Activation
+#### 6. Clean TV Launcher Sideload & Activation
 Sideload Monet Launcher (or Projectivy):
 ```bash
 adb install -r -g apks/monet-launcher.apk
 adb shell pm grant com.klevico.monet android.permission.WRITE_SECURE_SETTINGS
 
-# Disable stock Reliance launcher
-adb shell pm disable-user --user 0 com.iwedia.ui.rjio.launcher.reliance  # JHS
-# (or com.jio.media.stblauncher on legacy models)
+# CRITICAL FIX for Jio's PackageManagerService (PMS):
+# Jio's PMS has a 'Relax SCAN_REQUIRE_KNOWN' flag and SSO service that automatically
+# re-enables disabled apps on cold boot ('pm disable-user' does NOT survive reboot).
+# The only persistent fix is 'pm uninstall --user 0', which strips it from user 0's
+# active database while keeping the APK intact in /system:
+adb shell pm uninstall --user 0 com.iwedia.ui.rjio.launcher.reliance  # JHS / JMSD200A
+# (To revert in future: adb shell cmd package install-existing com.iwedia.ui.rjio.launcher.reliance)
 
 # Set Monet as default Home Activity
 adb shell cmd package set-home-activity com.klevico.monet/.HomeActivity
+adb shell am force-stop com.iwedia.ui.rjio.launcher.reliance
 adb shell input keyevent KEYCODE_HOME
 ```
 
-#### 6. Remote Keymapper (`TVHome.apk`) Hotkey Configuration
+#### 7. Remote Keymapper (`TVHome.apk`) Hotkey Configuration
 Sideload the CleanYourTV accessibility button remapper:
 ```bash
 adb install -r -g apks/TVHome.apk
