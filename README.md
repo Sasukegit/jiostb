@@ -117,10 +117,14 @@ When a new firmware update is intercepted, the lab saves the URL to `fota_update
 ### Module 6: Debloating, Settings Shortcuts & Hotkeys Guide
 Detailed step-by-step instructions to uninstall stock Jio launcher, ads, and telemetry while configuring **Projectivy Launcher**, native **Android TV Settings**, and **CleanYourTV remote hotkeys** are documented in [`DEBLOAT_GUIDE.md`](DEBLOAT_GUIDE.md).
 
-Prebuilt shortcut APKs are included in [`apks/`](apks/):
+Prebuilt companion APKs are included in [`apks/`](apks/):
 * `AndroidSettingsShortcut.apk`: Direct launcher for native Android TV Settings (`com.android.tv.settings`).
 * `JioSettingsShortcut.apk`: Standalone launcher for Jio Settings (`com.rjil.jiostbsetting`).
 * `TVHome.apk`: CleanYourTV remote hotkey mapper.
+* `monet-launcher.apk`: Lightweight Material You Android TV launcher.
+* `shevery-release.apk`: On-device Shizuku shell (`uid=2000`) for PC-free management.
+* `AuroraStore_4.8.4.apk`: Open-source Google Play Store client for Android TV.
+* `mediashell.apk`: Production Google Cast receiver update enabling genuine Chromecast built-in streaming.
 
 ---
 
@@ -242,7 +246,11 @@ jio-fota-toolkit/
 ├── 📂 apks/                            # Prebuilt companion APKs
 │   ├── AndroidSettingsShortcut.apk    # Native Android TV Settings launcher
 │   ├── JioSettingsShortcut.apk        # Standalone Jio Settings launcher
-│   └── TVHome.apk                     # CleanYourTV remote key mapper
+│   ├── TVHome.apk                     # CleanYourTV remote key mapper
+│   ├── monet-launcher.apk             # Material You clean TV launcher
+│   ├── shevery-release.apk            # On-device Shizuku shell provider
+│   ├── AuroraStore_4.8.4.apk          # Open-source Google Play client
+│   └── mediashell.apk                 # Production Google Cast receiver update
 │
 ├── 🔑 forged_chain.pem                 # Verified TLS intermediate chain
 ├── ⚙️ spoofed_version.txt              # Target version to spoof (model presets inside)

@@ -45,21 +45,85 @@ pm disable-user --user 0 com.jio.universalsetup
 pm disable-user --user 0 com.netflix.partnertoken
 ```
 
-### C. Replace Stock Launcher with Projectivy Launcher
-1. Sideload Projectivy Launcher:
-   ```bash
-   adb install Projectivy_Launcher.apk
-   ```
-2. Disable the bloated Reliance Stock Launcher:
-   ```bash
-   pm disable-user --user 0 com.iwedia.ui.rjio.launcher.reliance
-   pm uninstall -k --user 0 com.iwedia.ui.rjio.launcher.reliance
-   ```
-3. Press the Home button on the remote. Android TV will immediately make Projectivy the default Home screen.
+### C. Replace Stock Launcher (Projectivy or Monet)
+Choose your preferred clean launcher:
+* **Option 1: Monet Launcher** (Lightweight Material You launcher bundled in `apks/`):
+  ```bash
+  adb install apks/monet-launcher.apk
+  ```
+* **Option 2: Projectivy Launcher** (Highly customizable Android TV launcher):
+  ```bash
+  adb install Projectivy_Launcher.apk
+  ```
+
+Disable the bloated Reliance Stock Launcher:
+```bash
+pm disable-user --user 0 com.iwedia.ui.rjio.launcher.reliance
+pm uninstall -k --user 0 com.iwedia.ui.rjio.launcher.reliance
+```
+Press the Home button on the remote. Android TV will immediately prompt or default to your new launcher.
 
 ---
 
-## 2. Restoring Native Android TV Settings vs. Jio Settings
+## 2. On-Device Shell & App Management (No PC Needed Afterward)
+
+### A. Shevery (`apks/shevery-release.apk`) — On-Device Shizuku Shell
+* **What it is:** **Shevery** (`com.hamondev.shevery`) is a standalone, on-device **Shizuku API provider**.
+* **Why use it:** Once ADB is unlocked, installing Shevery gives you persistent `uid=2000(shell)` privileges directly on the TV. You can install APKs silently, freeze/unfreeze apps, and grant runtime permissions directly from the TV without plugging in a PC!
+* **Installation:**
+  ```bash
+  adb install apks/shevery-release.apk
+  ```
+
+### B. Aurora Store (`apks/AuroraStore_4.8.4.apk`) — Open-Source Play Store
+* **What it is:** An open-source, privacy-friendly Google Play Store client for Android TV.
+* **Why use it:** Allows downloading, installing, and updating any Android TV application without Google Play Services or logging into a personal Google account.
+* **Installation:**
+  ```bash
+  adb install apks/AuroraStore_4.8.4.apk
+  ```
+
+---
+
+## 3. Upgrading the Google Cast (Chromecast Built-In) Stub
+
+### The Problem: Hollow Stub
+On stock Jio firmware, casting from YouTube, Chrome, or smartphones fails. Inspection of the system partition reveals:
+* Jio ships `com.google.android.apps.mediashell` as an empty **0 MB stub** (`v0.0`, versionCode `1`) in `/product/priv-app/AndroidMediaShell`.
+* Because it is only a placeholder stub, the Chromecast receiver service does not run.
+
+### The Fix: Official Production Update (`apks/mediashell.apk`)
+We captured the genuine production Google Cast receiver update (`v3.72.446070`, versionCode `446070112`) and bundled it in [`apks/mediashell.apk`](apks/mediashell.apk):
+
+1. **Install the Production Cast Receiver:**
+   ```bash
+   adb install -r apks/mediashell.apk
+   ```
+2. **Verify Cast Service Activation:**
+   ```bash
+   adb shell dumpsys activity services com.google.android.apps.mediashell
+   ```
+   * The STB registers `CastReceiverService` with Google Cast client ID.
+   * Your TV immediately begins broadcasting as a genuine **Chromecast built-in** receiver (e.g. "Living Room TV") across your local Wi-Fi network!
+3. **DIAL Protocol Casting (`com.jio.dialserver`):**
+   * Keep `com.jio.dialserver` enabled. It provides the **DIAL (Discovery And Launch)** protocol created by Netflix and YouTube, allowing apps on your phone to launch and stream directly to your TV.
+
+---
+
+## 4. Important Notice: JioTV+ & Jio SSO (`com.media.jio.sso.stb`)
+
+> [!WARNING]
+> **DO NOT DISABLE `com.media.jio.sso.stb` if you plan to use JioTV+ or LiveTV!**
+
+* **Why:** All Jio media apps (`com.jio.media.jiotvplus`, `com.jio.media.livetv`, `com.jio.myjiotv`) rely on Jio's Single Sign-On service via intent `app://open.sso.app`.
+* If `com.media.jio.sso.stb` is uninstalled or disabled, launching JioTV+ triggers a fatal `ActivityNotFoundException` crash.
+* **If you accidentally disabled it, restore it via:**
+  ```bash
+  cmd package install-existing com.media.jio.sso.stb
+  pm enable com.media.jio.sso.stb
+  ```
+
+## 5. Restoring Native Android TV Settings vs. Jio Settings
 
 On stock Jio firmware, Jio hardcodes their proprietary settings app (`com.rjil.jiostbsetting`) with an intent filter `priority="999"` for `android.settings.SETTINGS`. This forcefully hijacks all settings clicks and hides standard Android TV options (such as developer options, accessibility services, app permissions, and storage).
 
@@ -90,7 +154,7 @@ Inside [`apks/`](apks/), we provide two dedicated lightweight launcher shortcuts
 
 ---
 
-## 3. Remote Control Key Remapping (CleanYourTV)
+## 6. Remote Control Key Remapping (CleanYourTV)
 
 Jio remotes feature dedicated shortcut buttons that normally force-launch Jio apps or stay dead when stock apps are uninstalled.
 
@@ -126,7 +190,7 @@ settings put secure enabled_accessibility_services com.gathin.tvhome/.InputKeySe
 
 ---
 
-## 4. Low-Level Network Discoveries & System Mechanics
+## 7. Low-Level Network Discoveries & System Mechanics
 
 ### A. NTP Time Synchronization (UDP Port 123)
 * **The Mechanism:** Upon boot, TeleOS verifies real-world time before attempting any TLS handshake with Jio ACS or Google servers.
@@ -143,7 +207,7 @@ settings put secure enabled_accessibility_services com.gathin.tvhome/.InputKeySe
 
 ---
 
-## 5. Firmware Downgrading Mechanics (`DowngradeEnable`)
+## 8. Firmware Downgrading Mechanics (`DowngradeEnable`)
 
 Jio STBs normally block flashing older firmware using anti-rollback timestamp checks. However, Jio engineers embedded a TR-181 override parameter:
 * **`Device.JioSTB.FOTA.DowngradeEnable`** (`true`)
@@ -156,7 +220,7 @@ Jio STBs normally block flashing older firmware using anti-rollback timestamp ch
 
 ---
 
-## 6. Reversing / Restoring Stock State
+## 9. Reversing / Restoring Stock State
 
 Because all debloating is performed under `--user 0`, the modifications are **100% reversible**:
 * **To re-enable any specific app:**
