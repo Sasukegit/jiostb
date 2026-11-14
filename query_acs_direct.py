@@ -58,9 +58,6 @@ if not SERIAL_NUMBER or not CPE_PASSWORD:
     combined = (acs_input + "Hee4Xeigaethaeye").encode("utf-8")
     CPE_PASSWORD = base64.b64encode(hashlib.sha256(combined).digest()[:16]).decode("utf-8").strip()
     print(f"[+] Computed CPE Digest Password: {CPE_PASSWORD}")
-            print(f"[i] Loaded credentials from device_credentials.json for {SERIAL_NUMBER} ({PRODUCT_CLASS})")
-    except Exception as e:
-        print(f"[!] Warning reading device_credentials.json: {e}")
 
 HEADERS = {
     "Host": REAL_ACS_HOST,
