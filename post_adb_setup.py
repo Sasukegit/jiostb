@@ -230,6 +230,10 @@ def step_system_tweaks():
     print("  STEP 5: Applying System UI & Visual Optimizations")
     print("=" * 60)
 
+    print("  [*] Bypassing Setup Wizards & marking device as provisioned...")
+    run_adb_shell("settings put secure user_setup_complete 1")
+    run_adb_shell("settings put global device_provisioned 1")
+
     print("  [*] Enforcing Permanent Dark Mode across all menus...")
     run_adb_shell("cmd uimode night yes")
     run_adb_shell("settings put secure ui_night_mode 2")
@@ -238,7 +242,7 @@ def step_system_tweaks():
     run_adb_shell("settings put global window_animation_scale 0.75")
     run_adb_shell("settings put global transition_animation_scale 0.75")
     run_adb_shell("settings put global animator_duration_scale 0.75")
-    print("[+] Dark mode and UI acceleration enabled!")
+    print("[+] Setup bypassed, dark mode and UI acceleration enabled!")
 
 def step_save_credentials(dev_info):
     print("\n" + "=" * 60)
