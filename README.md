@@ -288,6 +288,39 @@ jio-fota-toolkit/
 
 ---
 
+## 🛡️ Anti-Brick Architecture & Safety Guidelines
+
+This toolkit is engineered with strict non-destructive safety guardrails to ensure **zero brick risk** during normal operation:
+
+### 1. Why the 1-Click ADB Unlock is 100% Safe
+* The scripts (`UNLOCK_ADB_ETHERNET.bat`, `UNLOCK_ADB_WIFI.bat`, and `mock_acs_universal.py`) use standard, vendor-sanctioned TR-069 / TR-181 management RPCs (`Device.JioSTB.USB.USBDebugging`, `DebugValidityDate`, and `DowngradeEnable`).
+* **Zero bootloader tampering:** These RPCs do not touch U-Boot environment variables (`/dev/block/env`), do not repartition eMMC storage, and do not flash unsigned kernel images.
+* Even if your computer powers off or disconnects midway, the STB simply stays on its stock firmware without any corruption.
+
+### 2. The Native Root Hook (`Device.JioSTB.Debugging.CommandLine`)
+* Both **SDMC (JHS C200)** and **Droidlogic (JHS D200 / franklin)** contain a diagnostic on-boot command execution hook inside `libtr069client.so` and `TR069ClientService.apk`:
+  * `Device.JioSTB.Debugging.CommandLine.Enable`
+  * `Device.JioSTB.Debugging.CommandLine.OnBootExecuteCmd`
+  * `Device.JioSTB.Debugging.CommandLine.ValidityDate`
+  * `Device.JioSTB.Debugging.CommandLine.SaveToFile`
+* **Why our toolkit does NOT execute arbitrary CommandLine commands by default:**
+  * Running arbitrary commands via the native daemon carries significant brick risks in the hands of casual users (e.g. partition corruption or boot loops).
+  * Standard ADB unlock via `USBDebugging = true` achieves 100% sideloading, customization, and debloating capabilities safely within standard user/shell security boundaries without risking bricking.
+
+### 3. Golden Rules to Prevent Bricking Your Box
+
+| Action | Risk Level | Safe Recommendation |
+|---|---|---|
+| **1-Click ADB Unlock (`mock_acs_universal.py`)** | 🟢 **Zero Risk** | Safe for all users on all firmware versions. |
+| **Sideloading Launchers & APKs** | 🟢 **Zero Risk** | Completely safe via `adb install`. |
+| **Disabling Bloatware / Iwedia Updaters** | 🟢 **Zero Risk** | Safe via `pm disable-user --user 0`. Reversible at any time. |
+| **Disabling `com.jio.tr069client` on JHS boxes** | 🟡 **Moderate** | **Do NOT disable** on JHS models (`JHSC200`, `JHSD200`)! It kills network ADB persistence across reboots. |
+| **Running `adb shell reboot update` with USB Linux** | 🟡 **Recovery Drop** | Unsigned kernels are rejected by locked U-Boot, dropping the box into Android Recovery (`failed to mount /sdcard`). |
+| **Raw Partition Overwrite (`dd if=... of=/dev/block/...`)** | 🔴 **High Brick Risk** | **Never write raw images** to boot, recovery, or system partitions. Production bootloaders enforce signature checks. |
+| **Stage 2 Bootloader Unlock (`unlock.sh` / CVE-2024-31317)** | 🔴 **High Brick Risk** | Do not attempt unless you have serial UART console logs and eMMC flash recovery backups. |
+
+---
+
 ## 🙏 Credits & Acknowledgements
 
 This toolkit builds upon the foundational reverse-engineering and research contributed by the open-source community:
