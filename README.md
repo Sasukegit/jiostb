@@ -6,6 +6,20 @@ Supports all hardware generations of Reliance Jio Set-Top Boxes (**JHS D200 v1/v
 
 ---
 
+## 📚 Project Wiki & Documentation Directory
+
+To keep this main guide clean and actionable, detailed research, complete firmware tables, and advanced modification guides are split into dedicated wiki documents:
+
+| Document / Guide | Description |
+| :--- | :--- |
+| 📦 **[`FIRMWARE_CATALOG.md`](FIRMWARE_CATALOG.md)** | **45+ Verified Official Firmware Packages & Direct Download Links:** Complete archive of Akamai URLs covering Franklin (`JHSD200`, `JHSC200v2`, `JHSC200v3`), Legacy SDMC (`DV8545-Cn2`), 4K OTT STBs (`MSTB` A/B updates), Hotel builds (`*-H`), Jio Smart Displays (`curie`), and Media Hubs (`MCM3000`). |
+| 🛠️ **[`DEBLOAT_GUIDE.md`](DEBLOAT_GUIDE.md)** | **Post-ADB Debloating & Customization Guide:** Permanent removal of iWedia launcher (bypassing Jio's `Relax SCAN_REQUIRE_KNOWN` reboot reset via `pm uninstall --user 0`), Monet/Projectivy setup, forced Dark Mode, remote hotkey remapping (`TVHome.apk`), and **JioTV+ v6 upgrade guide with any-ISP mobile OTP login**. |
+| 🤖 **[`AGENTS.md`](AGENTS.md)** | **Autonomous AI Agent Runbook:** Machine-actionable protocols for AI agents (Claude Code, GPT, Antigravity) to autonomously detect hardware revisions, run 1-click ADB unlocks, and execute debloating. |
+| 🛡️ **[Anti-Brick Safety Matrix](#-anti-brick-architecture--safety-matrix)** | Full architectural breakdown explaining why standard non-destructive TR-069 RPCs prevent bricking your box. |
+| 🌐 **[Community & Credits](#-credits--acknowledgements)** | Acknowledgments, source references, and upstream research from OnlyTech Forums, GitHub, and XDA. |
+
+---
+
 ## 🌟 Discovered Official Firmware Packages (Direct Downloads)
 
 All firmware images listed below are directly hosted on Reliance Jio's public Akamai NetStorage servers without authentication.
@@ -326,6 +340,8 @@ This toolkit is engineered with strict non-destructive safety guardrails to ensu
 
 This toolkit builds upon the foundational reverse-engineering and research contributed by the open-source community:
 
+* **[OnlyTech Forums Community & stbuser88](https://onlytech.com/threads/jio-stb-sideload-apps-successfully.42903/page-7#post-722045):** For dumping the eMMC of the `JHSC200v3` and extracting 39 live official OTA package links across Franklin, SDMC, MSTB, and Curie platforms.
+* **[GaneshT2305 / jiostb-setup](https://github.com/GaneshT2305/jiostb-setup):** For diagnosing Jio's `PackageManagerService` `Relax SCAN_REQUIRE_KNOWN` reboot-reset behavior (`pm uninstall --user 0`), JioTV+ v6 split APK setup, and Kodi EPG automation.
 * **[JFC-Group / Housekeeping-PoC](https://github.com/JFC-Group/Housekeeping-PoC):** Foundational security research uncovering Jio's internal TR-069 CWMP housekeeping parameters and native CPE secret keys.
 * **[ilikechocopies / sideload-jiostb](https://github.com/ilikechocopies/sideload-jiostb):** Pioneering work on Dockerized captive DNS interception and proving ADB sideloading viability on modern Jio STBs.
 * **[shrikant0007 / jadedFella (jhsc200-sideload)](https://github.com/jadedFella/jhsc200-sideload):** Early documentation, shell scripts, and Android 9 payload analysis on SDMC JHS C200 hardware.

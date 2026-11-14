@@ -54,18 +54,38 @@ Choose your preferred clean launcher:
 * **Option 1: Monet Launcher** (Lightweight Material You launcher bundled in `apks/`):
   ```bash
   adb install apks/monet-launcher.apk
+  adb shell pm grant com.klevico.monet android.permission.WRITE_SECURE_SETTINGS
   ```
 * **Option 2: Projectivy Launcher** (Highly customizable Android TV launcher):
   ```bash
   adb install Projectivy_Launcher.apk
   ```
 
-Disable the bloated Reliance Stock Launcher:
+> [!CRITICAL]
+> **Persistent Launcher Fix (Jio PackageManagerService Quirk):**  
+> On Jio STB firmware, `pm disable-user --user 0 com.iwedia.ui.rjio.launcher.reliance` **does NOT survive a cold reboot!**  
+> Jio's customized `PackageManagerService` contains a flag named `Relax SCAN_REQUIRE_KNOWN` and an SSO service that automatically re-enables disabled apps on boot.  
+>  
+> To permanently remove the iWedia launcher across cold reboots:
+> ```bash
+> pm uninstall --user 0 com.iwedia.ui.rjio.launcher.reliance
+> ```
+> This removes the launcher registration for user 0 while leaving the APK safely in the read-only `/system` partition. Jio's bootloader does NOT reinstall uninstalled user packages.  
+> *(To restore it anytime: `cmd package install-existing com.iwedia.ui.rjio.launcher.reliance`)*
+
+Now set your clean launcher as the default HOME activity:
 ```bash
-pm disable-user --user 0 com.iwedia.ui.rjio.launcher.reliance
-pm uninstall -k --user 0 com.iwedia.ui.rjio.launcher.reliance
+cmd package set-home-activity com.klevico.monet/.HomeActivity
+# (or com.spocky.projengmenu/.activity.HomeActivity for Projectivy)
+am force-stop com.iwedia.ui.rjio.launcher.reliance
 ```
-Press the Home button on the remote. Android TV will immediately prompt or default to your new launcher.
+
+### D. System Visual Enhancement (Permanent Dark Mode)
+Force true dark mode across all Android TV system menus and settings:
+```bash
+cmd uimode night yes
+settings put secure ui_night_mode 2
+```
 
 ---
 
@@ -236,5 +256,51 @@ Because all debloating is performed under `--user 0`, the modifications are **10
   ```bash
   pm enable <package_name>
   ```
+* **To restore an uninstalled system app:**
+  ```bash
+  cmd package install-existing <package_name>
+  ```
 * **Full Factory Reset:**
   Settings $\to$ Device Preferences $\to$ Reset, or booting into Recovery (`adb reboot recovery`) restores the box to untouched factory defaults.
+
+---
+
+## 10. JioTV+ v6 Upgrade Guide (Modern Android TV UI & Any-ISP Mobile Login)
+
+### Why Upgrade to JioTV+ v6?
+* **Factory Stock STB (v2.6.7):** Ships with a 3-year-old clunky interface tied strictly to the iWedia launcher and requires an active JioFiber connection bound to the box's MAC address via `com.media.jio.sso.stb`.
+* **Play Store Android TV Build (v6.0.10):** Features a modern Android TV Leanback UI, fast channel guide (EPG), lower player latency, and standalone authentication.
+
+### Does it Work with a Normal Jio Mobile Number?
+**YES!** Unlike the factory v2.x build which is locked to your STB's hardware and JioFiber connection:
+* **JioTV+ v6 has a standalone OTP login screen.**
+* You can log in using **ANY active Jio mobile number** (prepaid or postpaid) or JioFiber RMN that has a JioTV+ plan entitlement.
+* You receive an SMS OTP on your phone, enter it on the TV screen, and all 800+ live TV channels and on-demand content play flawlessly over **ANY network or ISP** (Airtel, ACT, BSNL, local fiber, mobile hotspot, or Ethernet)!
+
+### Installation via ADB Split APKs:
+Jio STBs run 32-bit ARM (`armeabi-v7a`). Obtain the official `JioTV+ 6.0.10` APKS bundle, extract it, and install all splits simultaneously using `install-multiple`:
+
+```bash
+adb install-multiple -r base.apk split_config.armeabi_v7a.apk split_config.xhdpi.apk split_config.en.apk
+```
+
+To launch JioTV+ v6:
+```bash
+adb shell am start -n "com.jio.media.jiotvplus/com.jio.jioplay.jiotvplustwo.MainActivity"
+```
+
+---
+
+## 11. Community Credits & Source References
+
+This toolkit builds upon discoveries and research from the open-source community:
+
+* **OnlyTech Forums Community & stbuser88:**  
+  * [Breaking - Jio STB Sideload Apps Successfully (Thread)](https://onlytech.com/threads/jio-stb-sideload-apps-successfully.42903/page-7#post-722045)  
+  * Special thanks to **stbuser88** for dumping the eMMC of the `JHSC200v3` and revealing the 39 official internal OTA URLs across Franklin, SDMC, MSTB, and Curie platforms.
+* **GaneshT2305/jiostb-setup:**  
+  * [GitHub Repository: GaneshT2305/jiostb-setup](https://github.com/GaneshT2305/jiostb-setup)  
+  * Discovered the Jio `PackageManagerService` `Relax SCAN_REQUIRE_KNOWN` reboot-persistence quirk (`pm uninstall --user 0`), JioTV+ v6 split APK setup, and Kodi EPG automation.
+* **ilikechocopies/sideload-jiostb:**  
+  * [GitHub Repository: ilikechocopies/sideload-jiostb](https://github.com/ilikechocopies/sideload-jiostb)  
+  * Pioneer in demonstrating early Docker/Technitium TR-069 ACS interception on Jio STBs.
