@@ -47,6 +47,9 @@ pm disable-user --user 0 com.jio.stb.remotediagnose
 pm disable-user --user 0 com.jio.store
 pm disable-user --user 0 com.jio.universalsetup
 pm disable-user --user 0 com.netflix.partnertoken
+
+# Optional: Jio Voice Assistant (Only disable if remapping Mic button or using Google Assistant)
+# pm disable-user --user 0 com.android.app.jio.voiceassist
 ```
 
 ### C. Replace Stock Launcher (Projectivy or Monet)
