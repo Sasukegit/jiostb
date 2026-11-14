@@ -82,7 +82,9 @@ Deployed across commercial hotel chains, resort suites, and enterprise JioFiber 
 | Model / Target | Variant Name | Firmware Version | Android OS | Package Size | Direct Download URL |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Bluebank (JHSD200)** | Bluebank Hotel CDN | `11.2.70-H` | **Android 11 (API 30)** | **736,383,742 bytes** (~736.38 MB) | [Download](https://jiostb.cdn.jio.com/stbv/rjio_hybrid_bluebank_a11_ota-v11.2.70-H-user-bluebank_hotel.zip) |
-| **SDMC (JHSC200)** | SDMC Hotel CDN | `11.2.62-H` | **Android 11 (API 30)** | **739,862,424 bytes** (~739.86 MB) | [Download](https://jiostb.cdn.jio.com/stbv/rjio_hybrid_sdmc_a11_ota-v11.2.62-H-user-sdmc_hotel.zip) |
+| **SDMC (JHSC200)** | SDMC Hotel CDN (v11.3.46) | `11.3.46-H` | **Android 11 (API 30)** | **766,705,328 bytes** (~766.71 MB) | [Download](https://jiostb.cdn.jio.com/stbv/rjio_hybrid_sdmc_a11_ota-v11.3.46-H-user-sdmc_hotel.zip) |
+| **SDMC (JHSC200)** | SDMC Hotel CDN (v11.2.62) | `11.2.62-H` | **Android 11 (API 30)** | **739,862,424 bytes** (~739.86 MB) | [Download](https://jiostb.cdn.jio.com/stbv/rjio_hybrid_sdmc_a11_ota-v11.2.62-H-user-sdmc_hotel.zip) |
+| **SDMC (JHSC200)** | SDMC Hotel CDN (v11.2.9) | `11.2.9-H` | **Android 11 (API 30)** | **692,866,856 bytes** (~692.87 MB) | [Download](https://jiostb.cdn.jio.com/stbv/rjio_hybrid_sdmc_a11_ota-v11.2.9-H-user-sdmc_hotel.zip) |
 | **Skyworth (JMSC200)** | Skyworth Hotel CDN | `11.2.70-H` | **Android 11 (API 30)** | **736,295,330 bytes** (~736.30 MB) | [Download](https://jiostb.cdn.jio.com/stbv/rjio_hybrid_skyworth_a11_ota-v11.2.70-H-user-skyworth_hotel.zip) |
 | **S002C_9-H** | JHSC200 v3 Hotel | `11.2.9-H` | **Android 11 (API 30)** | **692,866,856 bytes** (~660.8 MB) | [Download](http://fota.slv.kai.jiophone.net/BHTS/DIN353/S002C_9-H/CKEv2odf5n.zip) |
 | **D002D_13-H** | JHSD200 Hotel | `11.2.13-H` | **Android 11 (API 30)** | **691,735,551 bytes** (~659.7 MB) | [Download](http://fota.slv.kai.jiophone.net/BHTS/DIN387/D002D_13-H/AyIwu7D7AB.zip) |
