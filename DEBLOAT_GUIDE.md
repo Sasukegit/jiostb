@@ -208,11 +208,44 @@ CleanYourTV stores key bindings in `/sdcard/Android/data/com.gathin.tvhome/files
     {"keyCode": 138, "action": "launch_app", "packageName": "in.startv.hotstar"},
     {"keyCode": 139, "action": "launch_app", "packageName": "com.jio.media.ondemand"},
     {"keyCode": 140, "action": "launch_app", "packageName": "org.smarttube.stable"},
-    {"keyCode": 131, "action": "launch_app", "packageName": "com.jio.media.jiotvplus"}
+    {"keyCode": 131, "action": "launch_app", "packageName": "com.jio.media.jiotvplus"},
+    {"keyCode": 231, "action": "launch_app", "packageName": "org.smarttube.stable"}
   ]
 }
 ```
 Ensure the Accessibility Service is enabled:
+```bash
+settings put secure enabled_accessibility_services com.gathin.tvhome/.InputKeyService
+```
+
+---
+
+### Voice Remote (Mic Button) & Bluetooth Remote Configuration
+
+The official Jio remote communicates via Bluetooth Low Energy (BLE HID) and includes an onboard microphone for voice commands.
+
+#### 1. How the Mic Button Operates
+* **Hardware Event:** Pressing the physical **Mic** button emits `KEYCODE_VOICE_ASSIST` (Linux keycode `231`).
+* **Stock Handler:** By default, Android routes this key event to **Jio Voice Assistant** (`com.android.app.jio.voiceassist`).
+* **Remote Firmware Updates:** Managed in the background by `com.iwedia.updatercuotaservice` (Bluetooth RCU OTA updater).
+
+#### 2. Configuration Options for the Mic Button
+* **Option A: Keep Jio Voice Assistant (Stock Behavior)**  
+  Keep `com.android.app.jio.voiceassist` enabled. Voice queries for channels, volume, and playback will continue operating through Jio's engine.
+* **Option B: Remap Mic Button to SmartTube Voice Search (Recommended)**  
+  Add `{"keyCode": 231, "action": "launch_app", "packageName": "org.smarttube.stable"}` to `config.json`. Pressing the Mic button immediately opens SmartTube's voice input prompt.
+* **Option C: Google Assistant Integration (Katniss + MicroG)**  
+  Install **Android TV Google Search** (`com.google.android.katniss`) and MicroG via Aurora Store. The OS will automatically register Katniss as the default `VOICE_ASSIST` handler across the entire system.
+
+#### 3. Bluetooth Voice Remote Pairing & Troubleshooting
+If the remote disconnects or you need to re-pair it:
+1. Open native Android TV Settings via our shortcut:
+   ```bash
+   adb shell am start -n com.android.tv.settings/.MainSettings
+   ```
+2. Navigate to **Remotes & Accessories** $\to$ **Add Accessory**.
+3. On the Jio Voice Remote, press and hold the **`Back` + `Menu`** buttons simultaneously for 5 seconds until the blue/red status LED blinks rapidly.
+4. Select **JioRemote** on the TV screen to complete Bluetooth pairing. Microphones, volume keys, and custom hotkeys will resume working immediately.
 ```bash
 settings put secure enabled_accessibility_services com.gathin.tvhome/.InputKeyService
 ```

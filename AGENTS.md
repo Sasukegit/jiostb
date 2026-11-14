@@ -170,7 +170,7 @@ adb shell am force-stop com.iwedia.ui.rjio.launcher.reliance
 adb shell input keyevent KEYCODE_HOME
 ```
 
-#### 7. Remote Keymapper (`TVHome.apk`) Hotkey Configuration
+#### 7. Remote Keymapper (`TVHome.apk`) & Voice Remote Configuration
 Sideload the CleanYourTV accessibility button remapper:
 ```bash
 adb install -r -g apks/TVHome.apk
@@ -179,9 +179,14 @@ adb install -r -g apks/TVHome.apk
 adb shell settings put secure enabled_accessibility_services com.home.tv/com.home.tv.services.HomeInterceptorService:com.android.talkback/com.google.android.marvin.talkback.TalkBackService
 adb shell settings put secure accessibility_enabled 1
 ```
-This intercepts the remote's hardcoded "Jio" or "Home" key and redirects directly to your custom launcher.
+* **Home Key Interception:** Intercepts the remote's hardcoded "Jio" or "Home" key and redirects directly to your custom launcher.
+* **Bluetooth Voice Remote (Mic Button):**
+  - Emits `KEYCODE_VOICE_ASSIST` (Linux keycode `231`).
+  - Stock handler is `com.android.app.jio.voiceassist`.
+  - To remap the Mic button to SmartTube Voice Search, map keycode `231` to `org.smarttube.stable` in `/sdcard/Android/data/com.gathin.tvhome/files/config.json`.
+  - To pair/re-pair the Bluetooth Voice Remote: Open Android TV Settings (`am start -n com.android.tv.settings/.MainSettings`), choose **Remotes & Accessories**, and hold **`Back` + `Menu`** for 5 seconds until the remote LED flashes.
 
-#### 7. Google Cast (Chromecast Built-In) Reactivation
+#### 8. Google Cast (Chromecast Built-In) Reactivation
 The stock cast receiver on Jio Android 11 is broken. Sideload and activate the verified production build:
 ```bash
 adb install -r -d apks/mediashell.apk
@@ -191,13 +196,13 @@ adb shell am startservice -a com.google.android.gms.cast.FIRST_SCREEN_JOIN -p co
 ```
 Now native casting from YouTube, Spotify, and Chrome works seamlessly from phones and PCs.
 
-#### 8. Native Android TV Settings Shortcut
+#### 9. Native Android TV Settings Shortcut
 ```bash
 adb install -r -g apks/AndroidSettingsShortcut.apk
 ```
 Enables 1-click access to native Android TV Settings (`com.user.androidsettings`) for Bluetooth audio pairing, Wi-Fi configuration, and Developer Options.
 
-#### 9. Shizuku / Shevery Shell Provider
+#### 10. Shizuku / Shevery Shell Provider
 ```bash
 adb install -r -g apks/shevery-release.apk
 adb shell pm grant com.hamondev.shevery android.permission.WRITE_SECURE_SETTINGS
