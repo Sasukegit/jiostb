@@ -227,18 +227,25 @@ settings put secure enabled_accessibility_services com.gathin.tvhome/.InputKeySe
 
 The official Jio remote communicates via Bluetooth Low Energy (BLE HID) and includes an onboard microphone for voice commands.
 
-#### 1. How the Mic Button Operates
-* **Hardware Event:** Pressing the physical **Mic** button emits `KEYCODE_VOICE_ASSIST` (Linux keycode `231`).
-* **Stock Handler:** By default, Android routes this key event to **Jio Voice Assistant** (`com.android.app.jio.voiceassist`).
-* **Remote Firmware Updates:** Managed in the background by `com.iwedia.updatercuotaservice` (Bluetooth RCU OTA updater).
+#### 1. Why Third-Party Voice Typing (SmartTube / Assistant) Fails on Jio Remote
+Through low-level AudioFlinger and Bluetooth GATT reverse-engineering on live hardware:
+* **No Android Audio HAL Bridge:** When third-party apps (SmartTube, Google Assistant, YouTube) attempt to record audio via `android.media.AudioRecord`, Android's AudioFlinger reports:
+  ```
+  Input device: 0 (AUDIO_DEVICE_NONE)
+  ```
+* **Proprietary BLE GATT Voice Stream:** Jio does **not** route the remote's microphone into standard Android Linux ALSA input. Instead, the remote transmits compressed voice packets exclusively over a proprietary Bluetooth GATT Service:
+  - **Custom Service UUID:** `8980f798-0614-11ea-8d71-362b9e155667`
+  - **Data Characteristic:** `8980f9fa-0614-11ea-8d71-362b9e155667`
+  - **Control Characteristic:** `8980f9fb-0614-11ea-8d71-362b9e155667`
+* **Exclusive Handler:** The **only** app on the STB with the proprietary decoder for this GATT audio stream is **`com.android.app.jio.voiceassist`**. Standard Android apps attempting to listen to `AudioRecord` receive total silence.
+* **Push-to-Talk (PTT) Requirement:** Even inside `com.android.app.jio.voiceassist`, the mic requires **holding down the physical Mic button while speaking** (Push-to-Talk). Releasing the button immediately terminates the BLE audio stream, causing the server to log `Empty input`.
 
-#### 2. Configuration Options for the Mic Button
-* **Option A: Keep Jio Voice Assistant (Stock Behavior)**  
-  Keep `com.android.app.jio.voiceassist` enabled. Voice queries for channels, volume, and playback will continue operating through Jio's engine.
-* **Option B: Remap Mic Button to SmartTube Voice Search (Recommended)**  
-  Add `{"keyCode": 231, "action": "launch_app", "packageName": "org.smarttube.stable"}` to `config.json`. Pressing the Mic button immediately opens SmartTube's voice input prompt.
-* **Option C: Google Assistant Integration (Katniss + MicroG)**  
-  Install **Android TV Google Search** (`com.google.android.katniss`) and MicroG via Aurora Store. The OS will automatically register Katniss as the default `VOICE_ASSIST` handler across the entire system.
+#### 2. Workarounds for Full Voice Typing in SmartTube & Google Assistant
+1. **Push-to-Talk with Jio Voice:** Press and **hold** the Mic button continuously while speaking near the top of the remote.
+2. **USB Air Mouse / Mic Remote (Universal Solution):**  
+   Plugging any standard 2.4GHz USB wireless air mouse (such as a G10s / G20s with USB dongle) provides a standard USB Audio Class input device (`/dev/snd/pcmC1D0c`). SmartTube, Google Assistant, and Kodi can record from it natively without any proprietary restrictions!
+3. **Smartphone Remote (Google TV / JioHome):**  
+   Using the virtual remote in the Google TV or JioHome smartphone app streams voice input from your phone's microphone directly into Android TV search fields over Wi-Fi.
 
 #### 3. Bluetooth Voice Remote Pairing & Troubleshooting
 If the remote disconnects or you need to re-pair it:
