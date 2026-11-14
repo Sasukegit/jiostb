@@ -4,10 +4,13 @@ Allows checking Jio TR-069 ACS for firmware updates and RPC commands
 completely from the PC without requiring the physical STB.
 
 CPE Credentials derived via reverse engineering of libtr069client & TR069ClientService:
-- Username: Device Serial Number (e.g. from `getprop ro.serialno`)
+- Username: Device Serial Number (from `getprop ro.serialno`)
 - Prepassword: Device ro.acsdata (from `getprop ro.acsdata`)
-- Native Secret Key (libcpe): Hee4Xeigaethaeye
-- Derived Password: Base64(SHA256(prepassword + secret)[:16])
+- Native Secret Key (libcpe sk):
+    * SDMC:     DahWaethuL9xoo3e
+    * Bluebank: Hee4Xeigaethaeye
+    * Skyworth: Rov5Ifozoobeeth8
+- Derived Password: Base64(SHA256(prepassword + secret_key)[:16])
 
 Run EXTRACT_CREDENTIALS.bat once while connected via ADB to generate device_credentials.json!
 """
@@ -22,11 +25,21 @@ from requests.auth import HTTPDigestAuth
 import urllib3
 urllib3.disable_warnings()
 
+MANUFACTURER_KEYS = {
+    "1": ("SDMC", "DahWaethuL9xoo3e"),
+    "2": ("Bluebank", "Hee4Xeigaethaeye"),
+    "3": ("Skyworth", "Rov5Ifozoobeeth8"),
+}
+
 REAL_ACS_URL = "https://49.40.134.113:8443/ftacs-digest/ACS"
 REAL_ACS_HOST = "acs.oss.jio.com:8443"
 SERIAL_NUMBER = None
 CPE_PASSWORD = None
 PRODUCT_CLASS = "JHSD200"
+
+def derive_cpe_password(acsdata, secret_key):
+    combined = (acsdata + secret_key).encode("utf-8")
+    return base64.b64encode(hashlib.sha256(combined).digest()[:16]).decode("utf-8").strip()
 
 # Check for local device credentials file
 creds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "device_credentials.json")
@@ -37,7 +50,8 @@ if os.path.exists(creds_path):
             SERIAL_NUMBER = creds.get("serial_number")
             CPE_PASSWORD = creds.get("cpe_password")
             PRODUCT_CLASS = creds.get("model", PRODUCT_CLASS)
-            print(f"[i] Loaded credentials from device_credentials.json for {SERIAL_NUMBER} ({PRODUCT_CLASS})")
+            vendor = creds.get("vendor", "SDMC")
+            print(f"[i] Loaded credentials from device_credentials.json for {SERIAL_NUMBER} ({PRODUCT_CLASS} / {vendor})")
     except Exception as e:
         print(f"[!] Warning reading device_credentials.json: {e}")
 
@@ -53,103 +67,106 @@ if not SERIAL_NUMBER or not CPE_PASSWORD:
     acs_input = input("Enter ro.acsdata (press Enter for default '9e434fa86d4f6ac7'): ").strip()
     if not acs_input:
         acs_input = "9e434fa86d4f6ac7"
+    
+    print("\nSelect Manufacturer:")
+    print("  1) SDMC     (JHSD200, JMSD200, etc.) [sk: DahWaethuL9xoo3e]")
+    print("  2) Bluebank (JHSB200, JMSB200, etc.) [sk: Hee4Xeigaethaeye]")
+    print("  3) Skyworth (JHSC200, JMSC200, etc.) [sk: Rov5Ifozoobeeth8]")
+    choice = input("Choice [1/2/3, default: 1]: ").strip()
+    vendor_name, sk = MANUFACTURER_KEYS.get(choice, MANUFACTURER_KEYS["1"])
+
     SERIAL_NUMBER = s_input
-    # Derive password
-    combined = (acs_input + "Hee4Xeigaethaeye").encode("utf-8")
-    CPE_PASSWORD = base64.b64encode(hashlib.sha256(combined).digest()[:16]).decode("utf-8").strip()
+    CPE_PASSWORD = derive_cpe_password(acs_input, sk)
+    print(f"[+] Using {vendor_name} key: {sk}")
     print(f"[+] Computed CPE Digest Password: {CPE_PASSWORD}")
 
-HEADERS = {
-    "Host": REAL_ACS_HOST,
-    "User-Agent": "curl/7.69.1",
-    "Content-Type": "text/xml; charset=utf-8",
-    "SOAPAction": '""'
-}
+SESSION_ID = "pc_tr069_session_01"
 
-def query_acs(software_version="STB-JHSD200-11.1.0"):
+INFORM_XML = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
+  <soapenv:Header>
+    <cwmp:ID soapenv:mustUnderstand="1">{SESSION_ID}</cwmp:ID>
+  </soapenv:Header>
+  <soapenv:Body>
+    <cwmp:Inform>
+      <DeviceId>
+        <Manufacturer>Reliance Jio</Manufacturer>
+        <OUI>000000</OUI>
+        <ProductClass>{PRODUCT_CLASS}</ProductClass>
+        <SerialNumber>{SERIAL_NUMBER}</SerialNumber>
+      </DeviceId>
+      <Event soapenv:arrayType="cwmp:EventStruct[1]">
+        <EventStruct>
+          <EventCode>1 BOOT</EventCode>
+          <CommandKey></CommandKey>
+        </EventStruct>
+      </Event>
+      <MaxEnvelopes>1</MaxEnvelopes>
+      <CurrentTime>2026-11-14T12:00:00Z</CurrentTime>
+      <RetryCount>0</RetryCount>
+      <ParameterList soapenv:arrayType="cwmp:ParameterValueStruct[2]">
+        <ParameterValueStruct>
+          <Name>Device.DeviceInfo.SoftwareVersion</Name>
+          <Value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">11.3.46</Value>
+        </ParameterValueStruct>
+        <ParameterValueStruct>
+          <Name>Device.ManagementServer.ConnectionRequestURL</Name>
+          <Value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">http://192.168.29.10:7547/tr069</Value>
+        </ParameterValueStruct>
+      </ParameterList>
+    </cwmp:Inform>
+  </soapenv:Body>
+</soapenv:Envelope>"""
+
+def main():
     print("=" * 60)
-    print("  JIO STB STANDALONE ACS QUERY")
-    print(f"  Target Serial:   {SERIAL_NUMBER}")
-    print(f"  Product Class:   {PRODUCT_CLASS}")
-    print(f"  Spoofed Version: {software_version}")
-    print(f"  ACS Endpoint:    {REAL_ACS_URL}")
+    print("  Jio STB Standalone ACS Query (TR-069 CWMP)")
+    print(f"  Target:   {REAL_ACS_URL}")
+    print(f"  Serial:   {SERIAL_NUMBER}")
+    print(f"  Password: {CPE_PASSWORD}")
     print("=" * 60)
 
-    inform_body = f"""<soap-env:Envelope xmlns:soap-enc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
-<soap-env:Header><cwmp:ID soap-env:mustUnderstand="1">0</cwmp:ID></soap-env:Header>
-<soap-env:Body><cwmp:Inform>
-<DeviceId><Manufacturer>Reliance Jio</Manufacturer><OUI>000000</OUI><ProductClass>{PRODUCT_CLASS}</ProductClass><SerialNumber>{SERIAL_NUMBER}</SerialNumber></DeviceId>
-<Event soap-enc:arrayType="cwmp:EventStruct[1]"><EventStruct><EventCode>6 CONNECTION REQUEST</EventCode><CommandKey/></EventStruct></Event>
-<MaxEnvelopes>1</MaxEnvelopes><CurrentTime>2026-11-13T23:00:00+05:30</CurrentTime><RetryCount>0</RetryCount>
-<ParameterList soap-enc:arrayType="cwmp:ParameterValueStruct[4]">
-<ParameterValueStruct><Name>Device.DeviceInfo.HardwareVersion</Name><Value xsi:type="xsd:string">amlogic</Value></ParameterValueStruct>
-<ParameterValueStruct><Name>Device.DeviceInfo.SoftwareVersion</Name><Value xsi:type="xsd:string">{software_version}</Value></ParameterValueStruct>
-<ParameterValueStruct><Name>Device.ManagementServer.ConnectionRequestURL</Name><Value xsi:type="xsd:string">http://192.168.50.2:7547/641D93D0F90DCE99.html</Value></ParameterValueStruct>
-<ParameterValueStruct><Name>Device.ManagementServer.ParameterKey</Name><Value xsi:type="xsd:string">7174098644</Value></ParameterValueStruct>
-</ParameterList></cwmp:Inform></soap-env:Body></soap-env:Envelope>"""
-
-    auth = HTTPDigestAuth(SERIAL_NUMBER, CPE_PASSWORD)
     session = requests.Session()
+    session.verify = False
+    session.auth = HTTPDigestAuth(SERIAL_NUMBER, CPE_PASSWORD)
 
-    print("[1] Sending cwmp:Inform to Real Jio ACS...")
+    headers = {
+        "Host": REAL_ACS_HOST,
+        "User-Agent": "TR069-Client",
+        "SOAPAction": "",
+        "Content-Type": "text/xml; charset=utf-8",
+        "Connection": "keep-alive"
+    }
+
     try:
-        r = session.post(REAL_ACS_URL, data=inform_body, headers=HEADERS, auth=auth, verify=False, timeout=12)
+        print("[*] Sending CWMP Inform to Jio ACS...")
+        resp = session.post(REAL_ACS_URL, data=INFORM_XML.encode("utf-8"), headers=headers, timeout=12)
+        print(f"[+] HTTP Status: {resp.status_code}")
+        print(f"[+] Response Headers:")
+        for k, v in resp.headers.items():
+            print(f"    {k}: {v}")
+
+        if resp.status_code == 200:
+            print("\n[+] Success! ACS Response Payload:")
+            print(resp.text[:2000])
+            
+            # Send empty POST to continue TR-069 session handshake
+            print("\n[*] Sending Empty POST to fetch server tasks...")
+            empty_resp = session.post(REAL_ACS_URL, data="", headers=headers, timeout=12)
+            print(f"[+] HTTP Status: {empty_resp.status_code}")
+            if empty_resp.text:
+                print("[+] ACS Task Payload:")
+                print(empty_resp.text)
+            else:
+                print("[+] ACS returned empty body (no pending jobs).")
+        elif resp.status_code == 204:
+            print("[+] Status 204 No Content - Session accepted, no update pending for this build.")
+        elif resp.status_code == 401:
+            print("[-] HTTP 401 Unauthorized. Authentication failed. Check your Serial Number and ro.acsdata / secret key.")
+        else:
+            print(f"[!] Unexpected status {resp.status_code}:\n{resp.text}")
+
     except Exception as e:
         print(f"[-] Connection Error: {e}")
-        return
-
-    print(f"    ACS Response Code: {r.status_code}")
-    if r.status_code != 200:
-        print(f"[-] Authentication/Server Failed: {r.text[:300]}")
-        return
-
-    print("[+] Digest Authentication Successful! cwmp:InformResponse received.")
-
-    next_body = ""
-    step = 2
-    while True:
-        try:
-            r = session.post(REAL_ACS_URL, data=next_body, headers=HEADERS, auth=auth, verify=False, timeout=12)
-        except Exception as e:
-            print(f"[-] Session error: {e}")
-            break
-
-        print(f"[{step}] ACS Response Code: {r.status_code}")
-        if r.status_code == 204:
-            print("[+] ACS returned 204 No Content -> Session ended cleanly (No further RPCs).")
-            break
-        elif r.status_code == 200:
-            resp_xml = r.text
-            print(f"    Payload Received ({len(resp_xml)} bytes):")
-            print(resp_xml)
-
-            if "Download" in resp_xml:
-                print("\n" + "!" * 60)
-                print(">>> [ALERT] FIRMWARE DOWNLOAD RPC (cwmp:Download) FOUND!")
-                print("!" * 60 + "\n")
-
-            cwmp_id = "0"
-            if "<cwmp:ID" in resp_xml:
-                try:
-                    cwmp_id = resp_xml.split("<cwmp:ID")[1].split(">")[1].split("</cwmp:ID>")[0]
-                except Exception:
-                    pass
-
-            if "SetParameterValues" in resp_xml:
-                next_body = f"""<soap-env:Envelope xmlns:soap-enc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
-<soap-env:Header><cwmp:ID soap-env:mustUnderstand="1">{cwmp_id}</cwmp:ID></soap-env:Header>
-<soap-env:Body><cwmp:SetParameterValuesResponse><Status>0</Status></cwmp:SetParameterValuesResponse></soap-env:Body></soap-env:Envelope>"""
-            elif "GetParameterValues" in resp_xml:
-                next_body = f"""<soap-env:Envelope xmlns:soap-enc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:cwmp="urn:dslforum-org:cwmp-1-0">
-<soap-env:Header><cwmp:ID soap-env:mustUnderstand="1">{cwmp_id}</cwmp:ID></soap-env:Header>
-<soap-env:Body><cwmp:GetParameterValuesResponse><ParameterList soap-enc:arrayType="cwmp:ParameterValueStruct[0]"/></cwmp:GetParameterValuesResponse></soap-env:Body></soap-env:Envelope>"""
-            else:
-                next_body = ""
-            step += 1
-        else:
-            print(f"[-] Unexpected Status: {r.status_code}")
-            break
 
 if __name__ == "__main__":
-    version = sys.argv[1] if len(sys.argv) > 1 else "STB-JHSD200-11.1.0"
-    query_acs(version)
+    main()

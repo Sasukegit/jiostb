@@ -50,8 +50,11 @@ When asked to query Jio ACS for updates or test a new version:
    python query_acs_direct.py <VERSION_STRING>
    ```
 4. `query_acs_direct.py` automatically loads `device_credentials.json` if available, or prompts for device details if run standalone without configured credentials.
-5. To compute credentials manually for a different serial number $S$ and $ro.acsdata$ $A$:
-   $$\text{Password} = \text{Base64}\Big(\text{SHA-256}(A + \text{"Hee4Xeigaethaeye"})[0:16]\Big).\text{strip}()$$
+5. To compute credentials manually for a different serial number $S$ and $ro.acsdata$ $A$, select the vendor's secret key $sk$:
+   - SDMC (`JHSD200`): `DahWaethuL9xoo3e`
+   - Bluebank (`JHSB200`): `Hee4Xeigaethaeye`
+   - Skyworth (`JHSC200`): `Rov5Ifozoobeeth8`
+   $$\text{Password} = \text{Base64}\Big(\text{SHA-256}(A + sk)[0:16]\Big).\text{strip}()$$
 6. Analyze the SOAP response:
    - Status `200` with `204 No Content`: Device is authenticated; no pending tasks on ACS.
    - Status `200` with `<cwmp:SetParameterValues>`: ACS is configuring device parameters.

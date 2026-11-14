@@ -106,12 +106,17 @@ Deployed across commercial hotel chains, resort suites, and enterprise JioFiber 
 
 ## 6. JioFiber Routers / ONTs (Home Gateways)
 
+*Source: Captured OTA URLs documented in the [OnlyTech JioFiber ONT Router Firmware Updates](https://onlytech.com/threads/jiofiber-ont-router-firmware-updates.55330/) community thread and JFC-Group research.*
+
 | Router Model | Manufacturer | Firmware Version | File Format | Package Size | Direct Download URL |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **JCOW411** | Arcadyan | `R2.3` | `.img` | **69,468,436 bytes** (~69.4 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Arcadyan/JCOW411/ARCNTF1_JCOW411_R2.3.img) |
-| **JCOW404** | Sercomm | `R2.3` | `.img` | **69,075,220 bytes** (~69.0 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Sercomm/JCOW404/SRCMTF1_JCOW404_R2.3.img) |
-| **JCOW401** | Arcadyan | `R1.34` | `.img` | **63,176,980 bytes** (~63.1 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Arcadyan/JCOW401/ARCTF1_JCOW401_R1.34.img) |
-| **JCO110** | Arcadyan | `R1.130` | `.img` | **55,443,732 bytes** (~55.4 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Arcadyan/JCO110/ARCTF1_JCO110_R1.130.img) |
+| **JCOW414** | Sercomm | `SRCMTF1_JCOW414_R2.59.1` | `.img` + `.sig` | **40,714,008 bytes** (~40.71 MB) | [Image](https://fota.slv.kai.jiophone.net/XPGNO/DIN1002/S414W_591/BfajquMbOJ.img) / [Sig](https://fota.slv.kai.jiophone.net/XPGNO/DIN1002/S414W_591/BfajquMbOJ.sig) |
+| **JCOW414** | Sercomm | `SRCMTF1_JCOW414_R2.58.2` | `.img` + `.sig` | **40,716,704 bytes** (~40.72 MB) | [Image](https://fota.slv.kai.jiophone.net/XPGNO/DIN540/S414W_582/NtrbUbNvSe.img) / [Sig](https://fota.slv.kai.jiophone.net/XPGNO/DIN540/S414W_582/NtrbUbNvSe.sig) |
+| **JCOW414** | Sercomm | `SRCMTF1_JCOW414_R2.57` | `.img` + `.sig` | **40,659,456 bytes** (~40.66 MB) | [Image](http://fota.slv.kai.jiophone.net/XPGNO/DIN225/S414W_257/htrbUbNvSe.img) / [Sig](http://fota.slv.kai.jiophone.net/XPGNO/DIN225/S414W_257/htrbUbNvSe.sig) |
+| **JCOW411** | Arcadyan | `ARCNTF1_JCOW411_R2.3` | `.img` | **69,468,436 bytes** (~69.4 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Arcadyan/JCOW411/ARCNTF1_JCOW411_R2.3.img) |
+| **JCOW404** | Sercomm | `SRCMTF1_JCOW404_R2.3` | `.img` | **69,075,220 bytes** (~69.0 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Sercomm/JCOW404/SRCMTF1_JCOW404_R2.3.img) |
+| **JCOW401** | Arcadyan | `ARCTF1_JCOW401_R1.34` | `.img` | **63,176,980 bytes** (~63.1 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Arcadyan/JCOW401/ARCTF1_JCOW401_R1.34.img) |
+| **JCO110** | Arcadyan | `ARCTF1_JCO110_R1.130` | `.img` | **55,443,732 bytes** (~55.4 MB) | [Download](http://fota.slv.fxd.jiophone.net/ONT/Arcadyan/JCO110/ARCTF1_JCO110_R1.130.img) |
 
 ---
 

@@ -227,13 +227,19 @@ By reverse-engineering `TR069ClientService.apk` and native method `Java_insight_
 
 * **Username:** Device Serial Number (`ro.serialno`)
 * **Prepassword:** Read from system property `ro.acsdata` (default: `9e434fa86d4f6ac7`)
-* **Secret Key:** Exported by `cpeGetSK()` in `libtr069client.so`: `"Hee4Xeigaethaeye"`
+* **Manufacturer Secret Keys (`sk`):** Exported by `cpeGetSK()` in `libtr069client.so` across vendors:
+  | Hardware Vendor | STB Models | Secret Key (`sk`) |
+  | :--- | :--- | :--- |
+  | **SDMC** | `JHSD200`, `JMSD200` | `DahWaethuL9xoo3e` |
+  | **Bluebank** | `JHSB200`, `JMSB200A` | `Hee4Xeigaethaeye` |
+  | **Skyworth** | `JHSC200`, `JMSC200` | `Rov5Ifozoobeeth8` |
+
 * **CPE Digest Password Formula:**
-  $$\text{Combined} = \text{US-ASCII}(ro.acsdata) + \text{US-ASCII}(\text{"Hee4Xeigaethaeye"})$$
+  $$\text{Combined} = \text{US-ASCII}(ro.acsdata) + \text{US-ASCII}(sk)$$
   $$\text{Hash} = \text{SHA-256}(\text{Combined})$$
   $$\mathbf{\text{Password}} = \text{Base64}(\text{Hash}[0:16]).\text{trim}()$$
 
-With this formula, HTTP Digest Authentication against `https://acs.oss.jio.com:8443/ftacs-digest/ACS` (`realm="CPEDigestLogin"`, `qop="auth"`) can be generated automatically on any PC without physical STB hardware.
+With this formula, HTTP Digest Authentication against `https://acs.oss.jio.com:8443/ftacs-digest/ACS` (`realm="CPEDigestLogin"`, `qop="auth"`) can be generated automatically on any PC without physical STB hardware. Both [`dump_credentials.py`](dump_credentials.py) and [`query_acs_direct.py`](query_acs_direct.py) automatically detect and apply the vendor-specific key.
 
 ---
 
