@@ -8,9 +8,9 @@ All packages below are directly hosted on Reliance Jio's public Akamai NetStorag
 
 | Model / Variant | Hardware / Codename | Version | Android OS | Package Size | Direct Download URL |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **JHS D200 v2** | Bluebank Franklin (`BHTS` / `DIN995`) | `11.3.46` | **Android 11** | **792,359,990 bytes** (~792.3 MB) | [Download](http://fota.slv.kai.jiophone.net/BHTS/DIN995/B002D_346/qdOdPlaXso.zip) |
+| **JHS D200 v2 / JHS C200 (Franklin)** | Bluebank Franklin (`BHTS` / `DIN995` / `V06`) | `11.3.46` | **Android 11** | **792,359,990 bytes** (~792.3 MB) | [Download](http://fota.slv.kai.jiophone.net/BHTS/DIN995/B002D_346/qdOdPlaXso.zip) |
 | **JHS D200 v1** | Droidlogic Franklin | `5.7.1` | **Android 9 (Pie)** | **533,312,179 bytes** (~533.3 MB) | [Download](http://fota.slv.fxd.jiophone.net/STB/Droidlogic/JHSD200/STB-JHSD200-5.7.1.zip) |
-| **JHS C200** | SDMC (`DV8545-Cn2`) | `5.7.1` | **Android 9 (Pie)** | **532,008,639 bytes** (~532.0 MB) | [Download](http://fota.slv.fxd.jiophone.net/STB/SDMC/STB-JHSC200-5.7.1.zip) |
+| **JHS C200 (SDMC Legacy)** | SDMC (`DV8545-Cn2`) | `5.7.1` | **Android 9 (Pie)** | **532,008,639 bytes** (~532.0 MB) | [Download](http://fota.slv.fxd.jiophone.net/STB/SDMC/STB-JHSC200-5.7.1.zip) |
 
 ---
 
