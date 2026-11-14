@@ -108,7 +108,7 @@ Simply edit [`spoofed_version.txt`](spoofed_version.txt) with your target versio
 ### Module 5: Submitting Discovered Firmware to the Catalog
 When a new firmware update is intercepted, the lab saves the URL to `fota_update_found.json`.
 * **Option A (Google Form - 30 seconds, no GitHub required):**  
-  Fill out the [Jio Firmware Submission Google Form](https://forms.gle/YOUR_FORM_LINK) with the Akamai URL and model.
+  Fill out the [Jio Firmware Submission Google Form](https://forms.gle/thYgeHvudJRGabWn7) with the Akamai URL and model.
 * **Option B (1-Click Batch Helper):**  
   1. Double-click **`SHARE_NEW_FIRMWARE.bat`** (runs `share_firmware.py`).
   2. It previews the discovered URL and file size.

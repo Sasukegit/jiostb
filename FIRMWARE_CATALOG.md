@@ -5,7 +5,7 @@ All packages below are directly hosted on Reliance Jio's public Akamai NetStorag
 > [!TIP]
 > **Have a newly discovered firmware or Akamai OTA link?**  
 > Help expand this open-source archive!  
-> * 📝 **Quick Submission (No GitHub account needed):** [Submit via Google Form](https://forms.gle/YOUR_FORM_LINK)  
+> * 📝 **Quick Submission (No GitHub account needed):** [Submit via Google Form](https://forms.gle/thYgeHvudJRGabWn7)  
 > * 🐙 **GitHub Submission:** Open an issue via [GitHub New Firmware Issue](https://github.com/krishnasen2401/jiostb/issues/new) or run `SHARE_NEW_FIRMWARE.bat`.
 
 ---
