@@ -228,17 +228,24 @@ settings put secure enabled_accessibility_services com.gathin.tvhome/.InputKeySe
 The official Jio remote communicates via Bluetooth Low Energy (BLE HID) and includes an onboard microphone for voice commands.
 
 #### 1. Why Third-Party Voice Typing (SmartTube / Assistant) Fails on Jio Remote
-Through low-level AudioFlinger and Bluetooth GATT reverse-engineering on live hardware:
-* **No Android Audio HAL Bridge:** When third-party apps (SmartTube, Google Assistant, YouTube) attempt to record audio via `android.media.AudioRecord`, Android's AudioFlinger reports:
+Through low-level AudioFlinger, DEX decompilation, and Bluetooth GATT reverse-engineering on live hardware:
+* **Hardcoded Package Whitelist in `RecognitionService`:** DEX disassembly of `com.android.app.jio.voiceassist` (`VoiceServiceWrapper`, method 34264) reveals an explicit check on `calling_package`. When any third-party app (such as SmartTube `org.smarttube.stable` or Google Assistant) attempts to invoke the Android `RecognitionService`, Jio logs:
+  ```
+  No allowed app found. Access of Recognition service denied.
+  recogError==>true
+  ```
+* **No Android Audio HAL Bridge:** When third-party apps attempt to record audio directly via `android.media.AudioRecord`, Android's AudioFlinger reports:
   ```
   Input device: 0 (AUDIO_DEVICE_NONE)
   ```
-* **Proprietary BLE GATT Voice Stream:** Jio does **not** route the remote's microphone into standard Android Linux ALSA input. Instead, the remote transmits compressed voice packets exclusively over a proprietary Bluetooth GATT Service:
-  - **Custom Service UUID:** `8980f798-0614-11ea-8d71-362b9e155667`
-  - **Data Characteristic:** `8980f9fa-0614-11ea-8d71-362b9e155667`
-  - **Control Characteristic:** `8980f9fb-0614-11ea-8d71-362b9e155667`
-* **Exclusive Handler:** The **only** app on the STB with the proprietary decoder for this GATT audio stream is **`com.android.app.jio.voiceassist`**. Standard Android apps attempting to listen to `AudioRecord` receive total silence.
-* **Push-to-Talk (PTT) Requirement:** Even inside `com.android.app.jio.voiceassist`, the mic requires **holding down the physical Mic button while speaking** (Push-to-Talk). Releasing the button immediately terminates the BLE audio stream, causing the server to log `Empty input`.
+  There is zero ALSA audio driver bridge between the remote and the Linux kernel.
+* **Proprietary BLE GATT Voice Stream & Handshake:**
+  The remote does not stream raw PCM over standard Bluetooth audio profiles. Instead, audio is negotiated over proprietary Bluetooth Low Energy GATT characteristics:
+  - **GATT Service UUID:** `8980f798-0614-11ea-8d71-362b9e155667`
+  - **Audio Data Characteristic:** `8980f9fa-0614-11ea-8d71-362b9e155667`
+  - **Audio Control Characteristic:** `8980f9fb-0614-11ea-8d71-362b9e155667`
+* **Why the Remote LED Blinks Constantly:**
+  In `voiceassist.apk` (`ServiceBleVoiceRead`), starting audio requires an active GATT handshake (`open mic` $\to$ `GATT_VOICE_AUDIO_START`). If the STB fails to write to the control characteristic (`writeCharacteristic error` / `gattService null`), the remote's LED blinks continuously waiting for confirmation. After 5 seconds of receiving zero audio packets, the STB times out with `"intent": "error: empty input"`.
 
 #### 2. Workarounds for Full Voice Typing in SmartTube & Google Assistant
 1. **Push-to-Talk with Jio Voice:** Press and **hold** the Mic button continuously while speaking near the top of the remote.
