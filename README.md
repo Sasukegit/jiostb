@@ -228,11 +228,11 @@ By reverse-engineering `TR069ClientService.apk` and native method `Java_insight_
 * **Username:** Device Serial Number (`ro.serialno`)
 * **Prepassword:** Read from system property `ro.acsdata` (default: `9e434fa86d4f6ac7`)
 * **Manufacturer Secret Keys (`sk`):** Exported by `cpeGetSK()` in `libtr069client.so` across vendors:
-  | Hardware Vendor | STB Models | Secret Key (`sk`) |
-  | :--- | :--- | :--- |
-  | **SDMC** | `JHSD200`, `JMSD200` | `DahWaethuL9xoo3e` |
-  | **Bluebank** | `JHSB200`, `JMSB200A` | `Hee4Xeigaethaeye` |
-  | **Skyworth** | `JHSC200`, `JMSC200` | `Rov5Ifozoobeeth8` |
+  | Hardware Vendor | STB Models | Secret Key (`sk`) | Derived CPE Password (`9e434fa8...`) |
+  | :--- | :--- | :--- | :--- |
+  | **SDMC** | `JHSD200`, `JMSD200` | `DahWaethuL9xoo3e` | `zt9XEtrw4sHvp2znZy4Ubg==` |
+  | **Bluebank** | `JHSB200`, `JMSB200A` | `Hee4Xeigaethaeye` | `S0Rj9xY80oCBeOnqiLxSMQ==` |
+  | **Skyworth** | `JHSC200`, `JMSC200` | `Rov5Ifozoobeeth8` | `fvHmJE3G3oz6QVrsrzw/ww==` |
 
 * **CPE Digest Password Formula:**
   $$\text{Combined} = \text{US-ASCII}(ro.acsdata) + \text{US-ASCII}(sk)$$
