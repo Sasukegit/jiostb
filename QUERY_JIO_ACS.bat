@@ -1,6 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+call "%~dp0scripts\ensure-python.bat"
+if %errorlevel% neq 0 exit /b 1
 
 echo ==========================================================
 echo       QUERY JIO TR-069 ACS DIRECTLY (STANDALONE)

@@ -31,10 +31,8 @@ All firmware images listed below are directly hosted on Reliance Jio's public Ak
 
 ## 🚀 1-Click Launchers
 
-Install Python dependencies before first run:
-```cmd
-pip install -r requirements.txt
-```
+> [!TIP]
+> **Zero Manual Setup Required:** All 1-click `.bat` launchers now include automated self-healing dependency checks. If `pycryptodome`, `requests`, or `urllib3` are missing, the launcher automatically installs them via pip on first run! (Manual install: `pip install -r requirements.txt`).
 
 ### Module 1: Permanent ADB Unlock (No Docker / Zero Dependencies)
 

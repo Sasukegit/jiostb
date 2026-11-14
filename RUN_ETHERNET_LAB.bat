@@ -1,13 +1,14 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+call "%~dp0scripts\ensure-python.bat"
+if %errorlevel% neq 0 exit /b 1
 
 echo ==========================================================
 echo        JIO STB FOTA LAB - ETHERNET MODE (1-CLICK)
 echo ==========================================================
 echo.
 
-:: Check for administrative permissions
 net session >nul 2>&1
 if %errorLevel% == 0 (
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start-ethernet-lab.ps1"

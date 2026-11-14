@@ -1,12 +1,12 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+call "%~dp0scripts\ensure-python.bat"
+if %errorlevel% neq 0 exit /b 1
 
 echo ==========================================================
-echo      JIO STB FOTA LAB - WI-FI HOTSPOT MODE (1-CLICK)
+echo       JIO STB FOTA LAB - WI-FI HOTSPOT MODE (1-CLICK)
 echo ==========================================================
-echo.
-echo Make sure Windows Mobile Hotspot is turned ON in Windows Settings!
 echo.
 
 net session >nul 2>&1
