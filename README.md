@@ -259,6 +259,7 @@ All batch scripts automatically prioritize this internal `bin/` directory if ADB
 jio-fota-toolkit/
 ├── ⚡ UNLOCK_ADB_ETHERNET.bat          # 1-Click: ADB Unlock via P2P Ethernet
 ├── ⚡ UNLOCK_ADB_WIFI.bat              # 1-Click: ADB Unlock via Wi-Fi Hotspot
+├── ⚡ 1CLICK_POST_ADB_SETUP.bat        # 1-Click: Complete Debloat, Monet Launcher & Hotkeys
 ├── ⚡ CAPTURE_FIRMWARE_ETHERNET.bat    # 1-Click: Firmware Capture via Ethernet
 ├── ⚡ CAPTURE_FIRMWARE_WIFI.bat        # 1-Click: Firmware Capture via Wi-Fi Hotspot
 ├── ⚡ QUERY_JIO_ACS.bat                # 1-Click: Standalone PC ACS Query
@@ -271,6 +272,7 @@ jio-fota-toolkit/
 │   ├── AdbWinApi.dll
 │   └── AdbWinUsbApi.dll
 │
+├── 🐍 post_adb_setup.py                # Post-ADB lockdown, debloater & setup engine
 ├── 🐍 mock_acs_universal.py           # Multi-stage ADB & Downgrade CWMP injector
 ├── 🐍 mock_acs.py                     # Legacy single-shot CWMP injector
 ├── 🐍 captive_lab.py                  # Ethernet captive server (DHCP, DNS, NTP, 204)

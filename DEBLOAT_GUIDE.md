@@ -4,9 +4,25 @@ This guide details how to permanently lock down the Reliance Jio STB (JHS D200 v
 
 ---
 
-## 1. Quick One-Line Debloat Script
+## 1. Automated 1-Click Post-ADB Setup (Recommended)
 
-Once connected via ADB (`adb connect <STB_IP>:5555`), execute the following shell commands to disable and uninstall bloatware for user `0`:
+To automate the entire debloating, launcher installation, hotkey remapping, and dark mode configuration in a single click:
+1. Double-click **[`1CLICK_POST_ADB_SETUP.bat`](1CLICK_POST_ADB_SETUP.bat)** (or run `python post_adb_setup.py`).
+2. The interactive script will automatically:
+   - Verify connection and detect your STB model (`JHSD200`, `JHSC200`, `JHSB200`).
+   - Freeze all Iwedia OTA update services while protecting `com.jio.tr069client` (ensuring ADB stays persistent).
+   - Disable Jio ads, bioscope, telemetry, and background trackers.
+   - Install all bundled utility APKs (`Monet Launcher`, `Shevery`, `Google Cast mediashell`, `Aurora Store`, `Settings shortcuts`, `TVHome`).
+   - Bypass the Jio PMS `Relax SCAN_REQUIRE_KNOWN` reboot bug by cleanly uninstalling the stock launcher for user `0` and activating Monet as default home.
+   - Configure CleanYourTV hotkeys (Netflix $\to$ Monet, Hotstar $\to$ Aurora Store, Prime $\to$ Android Settings).
+   - Enforce permanent Android TV Dark Mode.
+   - Dump your device's TR-069 credentials profile (`device_credentials.json`).
+
+---
+
+## 2. Manual Step-by-Step Debloat Commands
+
+If you prefer executing the shell commands manually via ADB (`adb connect <STB_IP>:5555`), follow the sections below:
 
 ### A. Disable All OTA Updaters & TR-069 Daemons
 
