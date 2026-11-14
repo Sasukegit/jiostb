@@ -72,7 +72,7 @@ def main():
 
     confirm = input("\nWould you like to open GitHub in your browser to submit this URL? (y/n): ").strip().lower()
     if confirm == "y":
-        repo_url = "https://github.com/krishnasen/jio-fota-toolkit/issues/new"
+        repo_url = "https://github.com/krishnasen2401/jiostb/issues/new"
         params = urllib.parse.urlencode({
             "title": title,
             "body": body
