@@ -9,20 +9,24 @@ This guide details how to permanently lock down the Reliance Jio STB (JHS D200 v
 Once connected via ADB (`adb connect <STB_IP>:5555`), execute the following shell commands to disable and uninstall bloatware for user `0`:
 
 ### A. Disable All OTA Updaters & TR-069 Daemons
+
+> [!WARNING]
+> **Important Note for JHS Series (JHSC200 / JHSD200 / JioOS 2.0):**  
+> Do **NOT** disable or uninstall `com.jio.tr069client` on JHS boxes!  
+> On JHS boxes, `com.jio.tr069client` reads `persist.iwedia.tr.adb.state` at each boot and activates network ADB (`service.adb.tcp.port = 5555`). Disabling it will cause ADB to drop offline after reboot. Keep `com.jio.tr069client` enabled and only disable the Iwedia OTA services (`com.iwedia.*`).
+
 ```bash
-# Disable background services
-pm disable-user --user 0 com.jio.tr069client
-pm disable-user --user 0 insight.tr069.client
+# Iwedia OTA update services (Disable on all JHS boxes to block OTAs)
 pm disable-user --user 0 com.iwedia.updateservice
 pm disable-user --user 0 com.iwedia.httpupdate
 pm disable-user --user 0 com.iwedia.pvodupdateservice
 pm disable-user --user 0 com.iwedia.updatercuotaservice
+pm clear com.iwedia.httpupdate
+pm clear com.iwedia.updateservice
 
-# Uninstall for user 0 (keeps system partition intact)
-pm uninstall -k --user 0 com.jio.tr069client
-pm uninstall -k --user 0 insight.tr069.client
-pm uninstall -k --user 0 com.iwedia.updateservice
-pm uninstall -k --user 0 com.iwedia.httpupdate
+# For JMSC200 / JMSB200 (Legacy JioOS) only:
+# pm disable-user --user 0 com.jio.tr069client
+# pm disable-user --user 0 insight.tr069.client
 ```
 
 ### B. Disable Jio Ads, Telemetry & Diagnostics

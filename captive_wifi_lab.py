@@ -1,3 +1,4 @@
+import base64
 from pathlib import Path
 import os
 import socket
@@ -5,6 +6,28 @@ import socketserver
 import struct
 import threading
 import time
+
+try:
+    from Crypto.Cipher import AES
+    _HAVE_AES = True
+except Exception:
+    _HAVE_AES = False
+
+NETCHECK_KEY = b"6bm2I7pTdBaeABX0"
+_PRECOMPUTED_NETCHECK = "UzLgdFHvJkBfRQiHnNQit+55dub3o1PbxIhuNZ7oJc8="
+
+def _forge_netcheck():
+    if not _HAVE_AES:
+        return _PRECOMPUTED_NETCHECK
+    try:
+        iv = os.urandom(16)
+        data = b"FTTH"
+        pl = 16 - (len(data) % 16)
+        data += bytes([pl]) * pl
+        ct = AES.new(NETCHECK_KEY, AES.MODE_CBC, iv).encrypt(data)
+        return base64.b64encode(iv + ct).decode()
+    except Exception:
+        return _PRECOMPUTED_NETCHECK
 
 BASE = Path(__file__).resolve().parent
 PID_FILE = BASE / "captive-wifi-lab.pid"
@@ -221,6 +244,25 @@ def handle_http_portal(conn, addr):
         data = conn.recv(1024)
         if data:
             req_line = data.decode('latin1', errors='ignore').split('\r\n')[0]
+            if "network/check" in req_line:
+                token = _forge_netcheck()
+                body = f'{{"Network":"{token}"}}'.encode("utf-8")
+                resp = (
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Content-Type: application/json\r\n"
+                    b"Content-Length: " + str(len(body)).encode("ascii") + b"\r\n"
+                    b"Connection: close\r\n\r\n" + body
+                )
+                conn.sendall(resp)
+                msg = f"[PORTAL] {addr[0]} >>> {req_line} -> returned forged FTTH netcheck token"
+                print(msg, flush=True)
+                try:
+                    with open(BASE / "captive_wifi_lab.log", "a", encoding="utf-8") as lf:
+                        lf.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+                except Exception:
+                    pass
+                return
+            
             msg = f"[PORTAL] {addr[0]} >>> {req_line} -> returning HTTP 204"
             print(msg, flush=True)
             try:

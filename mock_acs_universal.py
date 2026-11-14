@@ -131,21 +131,34 @@ def init_task_queue():
                 "is_adb": False,
             }
         },
-        # Stage 3: Disable FOTA (string type first, as defined in Jio STB TR-069 schemas)
+        # Stage 3: Enable FOTA Downgrade (Supported on both SDMC and Droidlogic)
         {
-            "desc": "Disable FOTA (string)",
+            "desc": "Enable FOTA Downgrade",
+            "params": [
+                ("Device.JioSTB.FOTA.DowngradeEnable", "xsd:boolean", "true"),
+                ("Device.JioSTB.FOTA.DowngradeValidityDate", "xsd:dateTime", "2037-12-31T23:59:59.000Z"),
+            ],
+            "is_adb": False,
+            "fallback": {
+                "desc": "Enable FOTA Downgrade (string)",
+                "params": [
+                    ("Device.JioSTB.FOTA.DowngradeEnable", "xsd:string", "true"),
+                    ("Device.JioSTB.FOTA.DowngradeValidityDate", "xsd:dateTime", "2037-12-31T23:59:59.000Z"),
+                ],
+                "is_adb": False,
+            }
+        },
+        # Stage 4: Disable FOTA (Supported on Droidlogic/JHSD200; SDMC/JHSC200 disables FOTA via ADB)
+        {
+            "desc": "Disable FOTA (Device.JioSTB)",
             "params": [
                 ("Device.JioSTB.FOTA.Disable", "xsd:string", "true"),
-                ("Device.JioSTB.FOTA.DowngradeEnable", "xsd:string", "true"),
-                ("Device.JioSTB.FOTA.DowngradeValidityDate", "xsd:dateTime", "2037-12-31T23:59:59.000Z"),
             ],
             "is_adb": False,
             "fallback": {
                 "desc": "Disable FOTA (boolean)",
                 "params": [
                     ("Device.JioSTB.FOTA.Disable", "xsd:boolean", "true"),
-                    ("Device.JioSTB.FOTA.DowngradeEnable", "xsd:boolean", "true"),
-                    ("Device.JioSTB.FOTA.DowngradeValidityDate", "xsd:dateTime", "2037-12-31T23:59:59.000Z"),
                 ],
                 "is_adb": False,
             }
@@ -271,8 +284,12 @@ def handle(conn, addr):
                     task_desc = current['desc'] if current else 'task'
                     log(f"{cid} *** SOAP FAULT on [{task_desc}]: Code={code}, Error='{msg}', Param='{param}' ***")
                     
-                    # Try fallback if defined
-                    if current and current.get("fallback"):
+                    if code == "9005" and "FOTA.Disable" in param:
+                        log(f"{cid} [NOTE] Device.JioSTB.FOTA.Disable is not in this model's schema (e.g. SDMC JHS C200).")
+                        log(f"{cid} [NOTE] Normal and safe! ADB is already unlocked; disable FOTA packages via ADB commands.")
+                    
+                    # Try fallback if defined (only if fault wasn't 9005 'Invalid parameter name')
+                    if current and current.get("fallback") and code != "9005":
                         fb = current["fallback"]
                         log(f"{cid} -> Queuing fallback: {fb['desc']}")
                         sess["tasks"].insert(0, fb)
