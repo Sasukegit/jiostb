@@ -128,6 +128,23 @@ Prebuilt companion APKs are included in [`apks/`](apks/):
 
 ---
 
+### Module 7: Google Cast / Chromecast Built-in Restoration
+
+Stock Jio firmware ships `com.google.android.apps.mediashell` as an empty **0 MB placeholder stub** (`v0.0`, `versionCode=1`) in `/product/priv-app`. As a result, casting from smartphones, tablets, or Chrome fails with `ClassNotFoundException: CastReceiverProxyService`.
+
+To restore full Google Cast functionality:
+1. Sideload the captured official production update bundled in [`apks/`](apks/):
+   ```bash
+   adb install -r apks/mediashell.apk
+   ```
+2. Verify that `CastReceiverService` is active:
+   ```bash
+   adb shell dumpsys activity services com.google.android.apps.mediashell
+   ```
+3. The STB immediately registers with Google Cast client ID and broadcasts across your local Wi-Fi network as a genuine Chromecast built-in receiver (e.g. "Living Room TV"). Keep `com.jio.dialserver` enabled for DIAL app discovery (Netflix, YouTube).
+
+---
+
 ### Stopping Labs & Cleaning Ports
 Whenever you finish testing, double click **`STOP_ALL_LABS.bat`** to terminate all background listeners, free ports (`53, 67, 80, 123, 443, 7443, 8443, 9443`), and restart Windows Time Service (`w32time`).
 

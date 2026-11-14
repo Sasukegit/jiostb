@@ -105,8 +105,13 @@ We captured the genuine production Google Cast receiver update (`v3.72.446070`, 
    ```
    * The STB registers `CastReceiverService` with Google Cast client ID.
    * Your TV immediately begins broadcasting as a genuine **Chromecast built-in** receiver (e.g. "Living Room TV") across your local Wi-Fi network!
-3. **DIAL Protocol Casting (`com.jio.dialserver`):**
-   * Keep `com.jio.dialserver` enabled. It provides the **DIAL (Discovery And Launch)** protocol created by Netflix and YouTube, allowing apps on your phone to launch and stream directly to your TV.
+3. **DIAL Protocol Casting & YouTube Handling:**
+   * **Keep `com.jio.dialserver` enabled:** It provides the **DIAL (Discovery And Launch)** protocol created by Netflix and YouTube, allowing phone apps to discover the TV on the local network.
+   * **How YouTube Casting Works on Jio STB:**
+     * Reliance's factory DIAL server specifically maps YouTube cast requests from phones to carrier-branded `com.jio.yt` (an embedded Chromium WebView wrapper).
+     * **If `com.jio.yt` is enabled:** The phone casts to Jio's WebView player. It works for basic playback, but runs with unskippable ads, clunky navigation, and poor 4K/HDR performance.
+     * **Recommended (SmartTube):** Sideload SmartTube (`org.smarttube.stable`). SmartTube includes its own built-in DIAL receiver and permanent "Link with TV Code" (`youtube.com/pair`). Once linked, phones cast directly to SmartTube with zero ads, SponsorBlock, and full 4K 60fps HDR.
+     * **Official YouTube TV APK (`com.google.android.youtube.tv`):** Can be installed via Aurora Store, but Google account sign-in and voice search require microG due to uncertified AOSP status.
 
 ---
 
