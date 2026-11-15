@@ -54,7 +54,12 @@ SET_PARAMS_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 </soap-env:Envelope>"""
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CERT_FILE = os.path.join(BASE_DIR, "forged_chain.pem")
+# Certificate selection:
+# acs_chain.pem contains CN=RILROOTCA matching HttpClient.pinningPublicKey on JMSD200A / JMSC200A
+if os.path.exists(os.path.join(BASE_DIR, "acs_chain.pem")):
+    CERT_FILE = os.path.join(BASE_DIR, "acs_chain.pem")
+else:
+    CERT_FILE = os.path.join(BASE_DIR, "forged_chain.pem")
 PORTS = [7443, 8443, 9443]
 BIND_ADDR = "0.0.0.0"
 
