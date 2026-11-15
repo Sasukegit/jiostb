@@ -12,7 +12,7 @@ To automate the entire debloating, launcher installation, hotkey remapping, and 
    - Verify connection and detect your STB model (`JHSD200`, `JHSC200`, `JHSB200`).
    - Freeze all Iwedia OTA update services while protecting `com.jio.tr069client` (ensuring ADB stays persistent).
    - Disable Jio ads, bioscope, telemetry, and background trackers.
-   - Install all bundled utility APKs (`Monet Launcher`, `Shevery`, `Google Cast mediashell`, `Aurora Store`, `Settings shortcuts`, `TVHome`).
+   - Install all bundled utility APKs (`Monet Launcher`, `OpenShelf FOSS App Store`, `Shevery`, `Google Cast mediashell`, `Aurora Store`, `Settings shortcuts`, `TVHome`).
    - Bypass the Jio PMS `Relax SCAN_REQUIRE_KNOWN` reboot bug by cleanly uninstalling the stock launcher for user `0` and activating Monet as default home.
    - Configure CleanYourTV hotkeys (Netflix $\to$ Monet, Hotstar $\to$ Aurora Store, Prime $\to$ Android Settings).
    - Enforce permanent Android TV Dark Mode.
@@ -118,7 +118,16 @@ settings put secure ui_night_mode 2
   adb install apks/shevery-release.apk
   ```
 
-### B. Aurora Store (`apks/AuroraStore_4.8.4.apk`) — Open-Source Play Store
+### B. OpenShelf (`apks/OpenShelf-0.7.0.apk`) — FOSS Android TV App Store
+* **What it is:** An open-source TV app store by [wingedpanther/openshelf](https://github.com/wingedpanther/openshelf) that indexes over 3,000+ open-source Android TV applications directly from their GitHub releases.
+* **Why use it:** Discover and install apps like SmartTube, Kodi, Stremio, NewPipe, and open-source launchers directly using only the TV remote control! It automatically picks the matching CPU architecture (`armeabi-v7a` or `arm64-v8a`), checks signing keys, and updates itself.
+* **Installation:**
+  ```bash
+  adb install apks/OpenShelf-0.7.0.apk
+  adb shell appops set io.github.wingedpanther.openshelf REQUEST_INSTALL_PACKAGES allow
+  ```
+
+### C. Aurora Store (`apks/AuroraStore_4.8.4.apk`) — Open-Source Play Store
 * **What it is:** An open-source, privacy-friendly Google Play Store client for Android TV.
 * **Why use it:** Allows downloading, installing, and updating any Android TV application without Google Play Services or logging into a personal Google account.
 * **Installation:**

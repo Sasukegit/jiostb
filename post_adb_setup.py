@@ -158,6 +158,7 @@ def step_install_apks():
 
     apk_files = [
         ("Monet Launcher (Clean Ad-free UI)", "monet-launcher.apk"),
+        ("OpenShelf (FOSS Android TV App Store)", "OpenShelf-0.7.0.apk"),
         ("Shevery (On-device Shizuku shell)", "shevery-release.apk"),
         ("Google Cast Receiver (Official Chromecast)", "mediashell.apk"),
         ("Aurora Store (Play Store Client)", "AuroraStore_4.8.4.apk"),
@@ -177,6 +178,10 @@ def step_install_apks():
             print("SUCCESS")
         else:
             print(f"FAILED ({res})")
+
+    # Pre-grant installer permissions so stores install apps without permission prompts
+    run_adb_shell("appops set io.github.wingedpanther.openshelf REQUEST_INSTALL_PACKAGES allow")
+    run_adb_shell("appops set com.aurora.store REQUEST_INSTALL_PACKAGES allow")
 
 def step_configure_launcher():
     print("\n" + "=" * 60)

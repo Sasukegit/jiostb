@@ -288,6 +288,7 @@ jio-fota-toolkit/
 │   ├── JioSettingsShortcut.apk        # Standalone Jio Settings launcher
 │   ├── TVHome.apk                     # CleanYourTV remote key mapper
 │   ├── monet-launcher.apk             # Material You clean TV launcher
+│   ├── OpenShelf-0.7.0.apk            # FOSS Android TV App Store (GitHub releases)
 │   ├── shevery-release.apk            # On-device Shizuku shell provider
 │   ├── AuroraStore_4.8.4.apk          # Open-source Google Play client
 │   └── mediashell.apk                 # Production Google Cast receiver update
@@ -349,6 +350,7 @@ This toolkit is engineered with strict non-destructive safety guardrails to ensu
 This toolkit builds upon the foundational reverse-engineering and research contributed by the open-source community:
 
 * **[mrsharmaji1301 (SharmaJi)](https://github.com/mrsharmaji1301):** Primary credit for authoring the initial version and foundational inspiration of the Jio STB unlock & debloat automation tooling.
+* **[wingedpanther / OpenShelf](https://github.com/wingedpanther/openshelf):** For the exceptional open-source Android TV app store that installs FOSS TV apps directly from GitHub releases via remote control.
 * **[OnlyTech Forums Community & stbuser88](https://onlytech.com/threads/jio-stb-sideload-apps-successfully.42903/page-7#post-722045):** For dumping the eMMC of the `JHSC200v3` and extracting 39 live official OTA package links across Franklin, SDMC, MSTB, and Curie platforms.
 * **[GaneshT2305 / jiostb-setup](https://github.com/GaneshT2305/jiostb-setup):** For diagnosing Jio's `PackageManagerService` `Relax SCAN_REQUIRE_KNOWN` reboot-reset behavior (`pm uninstall --user 0`), JioTV+ v6 split APK setup, and Kodi EPG automation.
 * **[JFC-Group / Housekeeping-PoC](https://github.com/JFC-Group/Housekeeping-PoC):** Foundational security research uncovering Jio's internal TR-069 CWMP housekeeping parameters and native CPE secret keys.
