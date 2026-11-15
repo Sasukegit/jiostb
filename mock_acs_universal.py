@@ -76,8 +76,16 @@ except Exception: pass
 def parse_cookie(headers):
     cookie_header = headers.get("cookie", "")
     if not cookie_header: return None
-    m = re.search(r'session=([0-9a-fA-F]+)', cookie_header)
+    m = re.search(r'(?:JSESSIONID|session)=([0-9a-zA-Z._-]+)', cookie_header)
     return m.group(1) if m else None
+
+def extract_auth_user(auth_str):
+    if not auth_str: return None
+    m = re.search(r'username=["\']?([^"\',]+)["\']?', auth_str)
+    return m.group(1) if m else None
+
+def get_http_date():
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
 def read_http(rf):
     try:
@@ -168,7 +176,13 @@ def init_task_queue():
 def send_next_task(s, cid, sess):
     if not sess["tasks"]:
         # All tasks done! Gracefully end session with 204
-        s.sendall(b"HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n")
+        date_hdr = get_http_date().encode()
+        s.sendall(
+            b"HTTP/1.1 204 No Content\r\n"
+            b"Server: nginx/1.30.1\r\n"
+            b"Date: " + date_hdr + b"\r\n"
+            b"Connection: keep-alive\r\n\r\n"
+        )
         status_msg = "SUCCESS - ADB UNLOCKED!" if sess.get("adb_unlocked") else "FINISHED (ADB status uncertain)"
         log(f"{cid} <<< 204 session closed. Final Status: {status_msg}")
         return
@@ -177,12 +191,13 @@ def send_next_task(s, cid, sess):
     sess["current"] = task
     cmd_id = "1" + uuid.uuid4().hex[:15]
     resp_xml = make_set_params_xml(task["params"], cmd_id).encode("utf-8")
+    date_hdr = get_http_date().encode()
     http_resp = (
         b"HTTP/1.1 200 OK\r\n"
+        b"Server: nginx/1.30.1\r\n"
+        b"Date: " + date_hdr + b"\r\n"
         b"Content-Type: text/xml; charset=utf-8\r\n"
         b"Content-Length: " + str(len(resp_xml)).encode() + b"\r\n"
-        b"Server: GenieACS/1.2.13\r\n"
-        b"SOAPServer: GenieACS/1.2.13\r\n"
         b"Connection: keep-alive\r\n\r\n" + resp_xml
     )
     s.sendall(http_resp)
@@ -221,8 +236,11 @@ def handle(conn, addr):
             # ---- NETWORK CHECK BYPASS ----
             if "network/check" in path:
                 nb = ('{"Network":"%s"}' % _forge_netcheck()).encode()
+                date_hdr = get_http_date().encode()
                 resp = (
                     b"HTTP/1.1 200 OK\r\n"
+                    b"Server: nginx/1.30.1\r\n"
+                    b"Date: " + date_hdr + b"\r\n"
                     b"Content-Type: application/json\r\n"
                     b"Content-Length: " + str(len(nb)).encode() + b"\r\n"
                     b"Connection: keep-alive\r\n\r\n" + nb
@@ -232,20 +250,38 @@ def handle(conn, addr):
                 continue
             
             # ---- HTTP DIGEST AUTH CHALLENGE (for BlueBank & strict TR-069 CPEs) ----
-            # Strict TR-069 CPEs (such as Bluebank / Franklin) require the ACS to challenge with 401 Digest.
-            # If 200 OK is returned to an unauthenticated Inform, the CPE drops the session and loops.
+            # Strict TR-069 CPEs (such as Bluebank JHSD200) require the ACS to challenge with 401 Digest.
+            # Real Jio ACS returns:
+            # HTTP/1.1 401 Unauthorized
+            # Server: nginx/1.30.1
+            # Date: Sun, 15 Nov 2026 06:12:58 GMT
+            # Content-Type: text/html;charset=UTF-8
+            # Content-Length: 71
+            # Connection: keep-alive
+            # WWW-Authenticate: Digest realm="CPEDigestLogin", qop="auth", nonce="...", opaque="..."
+            # X-Powered-By: Undertow/3
+            # Set-Cookie: JSESSIONID=...; path=/
             if not has_auth and not has_challenged and ("cwmp:Inform" in body_str or len(body) > 0):
                 has_challenged = True
-                nonce = uuid.uuid4().hex[:16]
+                nonce = str(uuid.uuid4())
+                opaque = uuid.uuid4().hex
+                jsession = uuid.uuid4().hex + ".nvmbdprv126605"
+                body_401 = b"<html><head><title>Error</title></head><body>Unauthorized</body></html>"
+                date_hdr = get_http_date().encode()
                 challenge_resp = (
                     b"HTTP/1.1 401 Unauthorized\r\n"
-                    b'WWW-Authenticate: Digest realm="CPEDigestLogin", domain="/ftacs-digest/ACS", qop="auth", nonce="' + nonce.encode() + b'", algorithm=MD5\r\n'
-                    b"Content-Length: 0\r\n"
-                    b"Server: GenieACS/1.2.13\r\n"
-                    b"Connection: keep-alive\r\n\r\n"
+                    b"Server: nginx/1.30.1\r\n"
+                    b"Date: " + date_hdr + b"\r\n"
+                    b"Content-Type: text/html;charset=UTF-8\r\n"
+                    b"Content-Length: " + str(len(body_401)).encode() + b"\r\n"
+                    b"Connection: keep-alive\r\n"
+                    b'WWW-Authenticate: Digest realm="CPEDigestLogin", qop="auth", nonce="' + nonce.encode() + b'", opaque="' + opaque.encode() + b'"\r\n'
+                    b"X-Powered-By: Undertow/3\r\n"
+                    b"Set-Cookie: JSESSIONID=" + jsession.encode() + b"; path=/\r\n\r\n"
+                    + body_401
                 )
                 s.sendall(challenge_resp)
-                log(f"{cid} <<< 401 Digest Challenge (realm=CPEDigestLogin, nonce={nonce[:8]}...)")
+                log(f"{cid} <<< 401 Digest Challenge (realm=CPEDigestLogin, nonce={nonce[:8]}..., opaque={opaque[:8]}...)")
                 continue
 
             # ---- CWMP: INFORM ----
@@ -259,29 +295,35 @@ def handle(conn, addr):
                 dev_info = f"Model={model_m.group(1) if model_m else '?'} Mfr={mfr_m.group(1) if mfr_m else '?'}"
                 log(f"{cid} [INFORM] Device Info: {dev_info}")
                 if has_auth:
-                    log(f"{cid} [AUTH] Client authenticated via HTTP Digest")
+                    auth_user = extract_auth_user(headers.get("authorization", ""))
+                    log(f"{cid} [AUTH] Client authenticated via HTTP Digest (username='{auth_user or 'unknown'}')")
                 
-                session_id = uuid.uuid4().hex[:16]
+                session_id = uuid.uuid4().hex
+                jsession_cookie = session_id + ".nvmbdprv126605"
                 conn_sess = {
                     "tasks": init_task_queue(),
                     "current": None,
                     "adb_unlocked": False
                 }
                 with SESSIONS_LOCK:
+                    SESSIONS[jsession_cookie] = conn_sess
                     SESSIONS[session_id] = conn_sess
+                    if cookie:
+                        SESSIONS[cookie] = conn_sess
                 
-                resp_xml = INFORM_RESPONSE_TEMPLATE.format(ID=req_id).encode()
+                resp_xml = INFORM_RESPONSE_TEMPLATE.format(ID=req_id).encode("utf-8")
+                date_hdr = get_http_date().encode()
                 http_resp = (
                     b"HTTP/1.1 200 OK\r\n"
+                    b"Server: nginx/1.30.1\r\n"
+                    b"Date: " + date_hdr + b"\r\n"
                     b"Content-Type: text/xml; charset=utf-8\r\n"
                     b"Content-Length: " + str(len(resp_xml)).encode() + b"\r\n"
-                    b"Set-Cookie: session=" + session_id.encode() + b"\r\n"
-                    b"Server: GenieACS/1.2.13\r\n"
-                    b"SOAPServer: GenieACS/1.2.13\r\n"
+                    b"Set-Cookie: JSESSIONID=" + jsession_cookie.encode() + b"; path=/\r\n"
                     b"Connection: keep-alive\r\n\r\n" + resp_xml
                 )
                 s.sendall(http_resp)
-                log(f"{cid} <<< InformResponse [cookie={session_id}]")
+                log(f"{cid} <<< InformResponse [cookie={jsession_cookie[:16]}...]")
                 continue
             
             # ---- CWMP: STATE MACHINE ----
@@ -321,9 +363,14 @@ def handle(conn, addr):
                 send_next_task(s, cid, sess)
                 continue
             
-            # ---- Unknown ----
-            log(f"{cid} ??? unknown state. Sending 204.")
-            s.sendall(b"HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n")
+            # ---- Unknown / Empty POST without session ----
+            date_hdr = get_http_date().encode()
+            s.sendall(
+                b"HTTP/1.1 204 No Content\r\n"
+                b"Server: nginx/1.30.1\r\n"
+                b"Date: " + date_hdr + b"\r\n"
+                b"Connection: keep-alive\r\n\r\n"
+            )
             continue
     
     except Exception as e:
