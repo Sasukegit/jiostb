@@ -16,9 +16,9 @@ Get-NetUDPEndpoint -LocalPort 53, 67, 123 -ErrorAction SilentlyContinue | ForEac
 }
 
 # 2. Kill python scripts by name
-Get-Process python -ErrorAction SilentlyContinue | Where-Object {
-    $_.CommandLine -match 'fota_captive_lab|fota_monitor_acs|captive_wifi_lab|mock_acs'
-} | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.CommandLine -match 'fota_captive_lab|fota_monitor_acs|captive_wifi_lab|captive_lab|mock_acs'
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 # 3. Clean pid files
 Get-ChildItem -Path $base -Filter "*.pid" | Remove-Item -Force -ErrorAction SilentlyContinue

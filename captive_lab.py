@@ -290,31 +290,73 @@ def dot_blocker():
 
 def main():
     print(f"Network setup started on {SERVICE_ADDRESS}", flush=True)
+    threads = []
+
+    # 1. DNS UDP
     udp_dns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_dns.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    udp_dns.bind(('0.0.0.0', DNS_PORT))
-    
+    try:
+        udp_dns.bind(('0.0.0.0', DNS_PORT))
+    except (PermissionError, OSError) as e:
+        print(f"[!] Warning: Cannot bind 0.0.0.0:{DNS_PORT} ({e}). Retrying on {SERVICE_ADDRESS}:{DNS_PORT}...", flush=True)
+        try:
+            udp_dns.bind((SERVICE_ADDRESS, DNS_PORT))
+            print(f"[+] Fallback successful: Bound UDP DNS directly to {SERVICE_ADDRESS}:{DNS_PORT}", flush=True)
+        except (PermissionError, OSError) as e2:
+            print(f"\n[ERROR] Port {DNS_PORT} (DNS) is blocked or in use by another process!", flush=True)
+            print(f"        Common causes on Windows:", flush=True)
+            print(f"        1. An orphaned python.exe process is still running. Run: taskkill /F /IM python.exe", flush=True)
+            print(f"        2. Windows Mobile Hotspot / ICS DNS proxy. Run: Stop-Service SharedAccess -Force", flush=True)
+            print(f"        3. Another DNS service or VPN is active (Docker, WSL2, AdGuard, etc.).\n", flush=True)
+            sys.exit(1)
+    threads.append(threading.Thread(target=udp_dns_loop, args=(udp_dns,), daemon=True))
+
+    # 2. DNS TCP
+    dns_tcp = None
+    try:
+        dns_tcp = ThreadedDnsTcpServer(('0.0.0.0', DNS_PORT), DnsTcpHandler)
+    except (PermissionError, OSError) as e:
+        print(f"[!] Warning: Cannot bind TCP 0.0.0.0:{DNS_PORT}. Retrying on {SERVICE_ADDRESS}:{DNS_PORT}...", flush=True)
+        try:
+            dns_tcp = ThreadedDnsTcpServer((SERVICE_ADDRESS, DNS_PORT), DnsTcpHandler)
+        except (PermissionError, OSError):
+            print(f"[!] Warning: TCP DNS on port {DNS_PORT} unavailable. Using UDP DNS only.", flush=True)
+    if dns_tcp:
+        threads.append(threading.Thread(target=dns_tcp.serve_forever, daemon=True))
+
+    # 3. DHCP Server
     dhcp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dhcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     dhcp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    dhcp.bind(('0.0.0.0', DHCP_PORT))
-    
+    try:
+        dhcp.bind(('0.0.0.0', DHCP_PORT))
+    except (PermissionError, OSError) as e:
+        print(f"[!] Warning: Cannot bind 0.0.0.0:{DHCP_PORT} ({e}). Retrying on {SERVICE_ADDRESS}:{DHCP_PORT}...", flush=True)
+        try:
+            dhcp.bind((SERVICE_ADDRESS, DHCP_PORT))
+        except (PermissionError, OSError):
+            print(f"[!] Warning: DHCP binding on {SERVICE_ADDRESS}:{DHCP_PORT} failed.", flush=True)
+    threads.append(threading.Thread(target=dhcp_loop, args=(dhcp,), daemon=True))
+
+    # 4. NTP Server
     ntp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     ntp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    ntp.bind(('0.0.0.0', 123))
+    try:
+        ntp.bind(('0.0.0.0', 123))
+    except (PermissionError, OSError) as e:
+        print(f"[!] Warning: Cannot bind 0.0.0.0:123 ({e}). Retrying on {SERVICE_ADDRESS}:123...", flush=True)
+        try:
+            ntp.bind((SERVICE_ADDRESS, 123))
+        except (PermissionError, OSError):
+            print(f"[!] Warning: NTP port 123 unavailable.", flush=True)
     ntp.settimeout(1.0)
+    threads.append(threading.Thread(target=ntp_loop, args=(ntp,), daemon=True))
 
-    dns_tcp = ThreadedDnsTcpServer(('0.0.0.0', DNS_PORT), DnsTcpHandler)
+    # 5. DoT Blocker & HTTP Portal
+    threads.append(threading.Thread(target=dot_blocker, daemon=True))
+    threads.append(threading.Thread(target=http_portal_loop, daemon=True))
 
     PID_FILE.write_text(str(os.getpid()), encoding="ascii")
-    threads = [
-        threading.Thread(target=udp_dns_loop, args=(udp_dns,), daemon=True),
-        threading.Thread(target=dhcp_loop, args=(dhcp,), daemon=True),
-        threading.Thread(target=dns_tcp.serve_forever, daemon=True),
-        threading.Thread(target=ntp_loop, args=(ntp,), daemon=True),
-        threading.Thread(target=dot_blocker, daemon=True),
-        threading.Thread(target=http_portal_loop, daemon=True),
-    ]
     for t in threads: t.start()
     print("Server is ready. Waiting for STB...", flush=True)
     try:
@@ -323,11 +365,17 @@ def main():
     except KeyboardInterrupt: pass
     finally:
         _running.clear()
-        udp_dns.close()
-        dhcp.close()
-        ntp.close()
-        dns_tcp.shutdown()
-        dns_tcp.server_close()
+        try: udp_dns.close()
+        except: pass
+        try: dhcp.close()
+        except: pass
+        try: ntp.close()
+        except: pass
+        if dns_tcp:
+            try:
+                dns_tcp.shutdown()
+                dns_tcp.server_close()
+            except: pass
         try: PID_FILE.unlink()
         except: pass
 

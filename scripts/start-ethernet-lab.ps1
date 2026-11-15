@@ -11,8 +11,25 @@ Write-Host "==========================================================" -Foregro
 
 # 1. Clean up old processes & ports
 Write-Host "`n[1/5] Cleaning up old processes & freeing ports..." -ForegroundColor Yellow
-Get-NetTCPConnection -LocalPort 53,80,443,7443,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
-    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+# Free UDP ports (DNS=53, DHCP=67, NTP=123)
+Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
+    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($proc.ProcessName -like "*python*") {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+# Free TCP ports
+Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
+    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($proc.ProcessName -like "*python*") {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+# Stop orphaned Python lab instances
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+    $_.CommandLine -like "*fota_captive*" -or $_.CommandLine -like "*captive_lab*" -or $_.CommandLine -like "*mock_acs*" 
+} | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 @('fota-lab.pid', 'captive-lab.pid') | ForEach-Object {
     $pidFile = Join-Path $base $_
@@ -27,13 +44,55 @@ Get-NetTCPConnection -LocalPort 53,80,443,7443,8443,9443 -ErrorAction SilentlyCo
 Write-Host "[2/5] Stopping Windows Time Service (w32time)..." -ForegroundColor Yellow
 Stop-Service w32time -ErrorAction SilentlyContinue
 
-# 3. Configure Ethernet Interface
-Write-Host "[3/5] Configuring Ethernet Adapter ($adapterName) to $labAddress..." -ForegroundColor Yellow
-$adapter = Get-NetAdapter -Name $adapterName -ErrorAction SilentlyContinue
-if (-not $adapter) {
-    # Try finding any physical ethernet adapter
-    $adapter = Get-NetAdapter | Where-Object { $_.InterfaceDescription -notmatch 'Virtual|Hyper-V|Loopback|TAP' -and $_.Status -ne 'Disabled' } | Select-Object -First 1
+# 3. Configure Ethernet Interface (with USB-to-Ethernet support)
+Write-Host "[3/5] Detecting Ethernet / USB-to-Ethernet Adapter..." -ForegroundColor Yellow
+$adapter = $null
+
+# Priority 1: USB-to-Ethernet dongles (Realtek USB, ASIX, TP-Link, etc.)
+$usbAdapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+    $_.PhysicalMediaType -ne 'Native 802.11' -and
+    $_.PhysicalMediaType -ne 'BlueTooth' -and
+    $_.MediaType -ne 'Native 802.11' -and
+    $_.InterfaceDescription -match 'USB|AX88|RTL815|LAN7500|Realtek.*USB|ASIX|Ethernet.*Adapter|Dongle' -and
+    $_.InterfaceDescription -notmatch 'Virtual|Hyper-V|Loopback|TAP|VPN|Host-Only|Bluetooth|Wi-Fi|Wireless|Direct' -and
+    $_.Status -ne 'Disabled'
 }
+if ($usbAdapters) {
+    $adapter = $usbAdapters | Select-Object -First 1
+    Write-Host "[+] Found USB-to-Ethernet Adapter: $($adapter.Name) ($($adapter.InterfaceDescription))" -ForegroundColor Green
+}
+
+# Priority 2: Named Ethernet adapter or "Ethernet*"
+if (-not $adapter) {
+    $adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -like "$adapterName*" -and
+        $_.PhysicalMediaType -ne 'Native 802.11' -and
+        $_.PhysicalMediaType -ne 'BlueTooth' -and
+        $_.MediaType -ne 'Native 802.11' -and
+        $_.InterfaceDescription -notmatch 'Virtual|Hyper-V|Loopback|TAP|VPN|Host-Only|Bluetooth|Wi-Fi|Wireless|Direct' -and
+        $_.Status -ne 'Disabled'
+    } | Select-Object -First 1
+}
+
+# Priority 3: Any physical wired Ethernet adapter (strictly excluding Wi-Fi and Bluetooth)
+if (-not $adapter) {
+    $adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+        $_.PhysicalMediaType -ne 'Native 802.11' -and
+        $_.PhysicalMediaType -ne 'BlueTooth' -and
+        $_.MediaType -ne 'Native 802.11' -and
+        $_.InterfaceDescription -notmatch 'Virtual|Hyper-V|Loopback|TAP|VPN|Host-Only|Bluetooth|Wi-Fi|Wireless|Direct|Tunnel|Tailscale' -and
+        $_.Status -ne 'Disabled'
+    } | Select-Object -First 1
+}
+
+if (-not $adapter) {
+    Write-Host "[!] ERROR: No wired or USB-to-Ethernet adapter found!" -ForegroundColor Red
+    Write-Host "    Please connect your USB-to-Ethernet adapter or Ethernet cable and re-run." -ForegroundColor Yellow
+    exit 1
+}
+
+$adapterName = $adapter.Name
+Write-Host "[+] Configuring Adapter: $adapterName ($($adapter.InterfaceDescription)) to $labAddress..." -ForegroundColor Green
 
 if ($adapter) {
     Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Forwarding Disabled -ErrorAction SilentlyContinue

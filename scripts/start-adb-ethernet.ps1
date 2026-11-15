@@ -9,8 +9,25 @@ $labAddress = '192.168.50.1'
 $labPrefix = 24
 
 Write-Host "Cleaning up lingering lab / mock ACS processes..."
-Get-NetTCPConnection -LocalPort 7443,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
-    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+# Free UDP ports (DNS=53, DHCP=67, NTP=123)
+Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
+    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($proc.ProcessName -like "*python*") {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+# Free TCP ports
+Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
+    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($proc.ProcessName -like "*python*") {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+# Stop orphaned Python lab instances
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+    $_.CommandLine -like "*captive_lab*" -or $_.CommandLine -like "*mock_acs*" 
+} | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 if (Test-Path (Join-Path $base 'captive-lab.pid')) {
     $oldPid = Get-Content (Join-Path $base 'captive-lab.pid') -ErrorAction SilentlyContinue
@@ -22,7 +39,55 @@ Write-Host "Stopping Windows Time Service (w32time) to free Port 123..."
 Stop-Service w32time -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 
-$adapter = Get-NetAdapter -Name $adapterName -ErrorAction Stop
+# Detect Ethernet / USB-to-Ethernet Adapter
+Write-Host "Detecting Ethernet / USB-to-Ethernet Adapter..."
+$adapter = $null
+
+# Priority 1: USB-to-Ethernet dongles (Realtek USB, ASIX, TP-Link, etc.)
+$usbAdapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+    $_.PhysicalMediaType -ne 'Native 802.11' -and
+    $_.PhysicalMediaType -ne 'BlueTooth' -and
+    $_.MediaType -ne 'Native 802.11' -and
+    $_.InterfaceDescription -match 'USB|AX88|RTL815|LAN7500|Realtek.*USB|ASIX|Ethernet.*Adapter|Dongle' -and
+    $_.InterfaceDescription -notmatch 'Virtual|Hyper-V|Loopback|TAP|VPN|Host-Only|Bluetooth|Wi-Fi|Wireless|Direct' -and
+    $_.Status -ne 'Disabled'
+}
+if ($usbAdapters) {
+    $adapter = $usbAdapters | Select-Object -First 1
+    Write-Host "[+] Found USB-to-Ethernet Adapter: $($adapter.Name) ($($adapter.InterfaceDescription))" -ForegroundColor Green
+}
+
+# Priority 2: Named Ethernet adapter or "Ethernet*"
+if (-not $adapter) {
+    $adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -like "$adapterName*" -and
+        $_.PhysicalMediaType -ne 'Native 802.11' -and
+        $_.PhysicalMediaType -ne 'BlueTooth' -and
+        $_.MediaType -ne 'Native 802.11' -and
+        $_.InterfaceDescription -notmatch 'Virtual|Hyper-V|Loopback|TAP|VPN|Host-Only|Bluetooth|Wi-Fi|Wireless|Direct' -and
+        $_.Status -ne 'Disabled'
+    } | Select-Object -First 1
+}
+
+# Priority 3: Any physical wired Ethernet adapter (never Wi-Fi or Bluetooth)
+if (-not $adapter) {
+    $adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {
+        $_.PhysicalMediaType -ne 'Native 802.11' -and
+        $_.PhysicalMediaType -ne 'BlueTooth' -and
+        $_.MediaType -ne 'Native 802.11' -and
+        $_.InterfaceDescription -notmatch 'Virtual|Hyper-V|Loopback|TAP|VPN|Host-Only|Bluetooth|Wi-Fi|Wireless|Direct|Tunnel|Tailscale' -and
+        $_.Status -ne 'Disabled'
+    } | Select-Object -First 1
+}
+
+if (-not $adapter) {
+    Write-Host "[!] ERROR: No wired or USB-to-Ethernet adapter found!" -ForegroundColor Red
+    Write-Host "    Please connect your USB-to-Ethernet adapter or Ethernet cable and re-run." -ForegroundColor Yellow
+    exit 1
+}
+
+$adapterName = $adapter.Name
+Write-Host "[+] Using Ethernet Adapter: $adapterName ($($adapter.InterfaceDescription))" -ForegroundColor Green
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Forwarding Disabled
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv6 -Forwarding Disabled
 & netsh.exe interface portproxy reset | Out-Null

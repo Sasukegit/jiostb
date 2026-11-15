@@ -331,7 +331,20 @@ def main():
     # Start DNS UDP
     dns_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dns_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    dns_sock.bind(('0.0.0.0', DNS_PORT))
+    try:
+        dns_sock.bind(('0.0.0.0', DNS_PORT))
+    except (PermissionError, OSError) as e:
+        print(f"[!] Warning: Cannot bind 0.0.0.0:{DNS_PORT} ({e}). Retrying on {SERVICE_ADDRESS}:{DNS_PORT}...", flush=True)
+        try:
+            dns_sock.bind((SERVICE_ADDRESS, DNS_PORT))
+            print(f"[+] Fallback successful: Bound UDP DNS directly to {SERVICE_ADDRESS}:{DNS_PORT}", flush=True)
+        except (PermissionError, OSError) as e2:
+            print(f"\n[ERROR] Port {DNS_PORT} (DNS) is blocked or in use by another process!", flush=True)
+            print(f"        Common causes on Windows:", flush=True)
+            print(f"        1. An orphaned python.exe process is still running. Run: taskkill /F /IM python.exe", flush=True)
+            print(f"        2. Windows Mobile Hotspot / ICS DNS proxy. Run: Stop-Service SharedAccess -Force", flush=True)
+            print(f"        3. Another DNS service or VPN is active (Docker, WSL2, AdGuard, etc.).\n", flush=True)
+            sys.exit(1)
     threading.Thread(target=udp_dns_loop, args=(dns_sock,), daemon=True).start()
     print("[DNS] UDP DNS Server listening on port 53", flush=True)
 
@@ -340,7 +353,14 @@ def main():
         dhcp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         dhcp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         dhcp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        dhcp_sock.bind(('0.0.0.0', DHCP_PORT))
+        try:
+            dhcp_sock.bind(('0.0.0.0', DHCP_PORT))
+        except (PermissionError, OSError) as e:
+            print(f"[!] Warning: Cannot bind 0.0.0.0:{DHCP_PORT} ({e}). Retrying on {SERVICE_ADDRESS}:{DHCP_PORT}...", flush=True)
+            try:
+                dhcp_sock.bind((SERVICE_ADDRESS, DHCP_PORT))
+            except (PermissionError, OSError):
+                print(f"[!] Warning: DHCP binding on {SERVICE_ADDRESS}:{DHCP_PORT} failed.", flush=True)
         threading.Thread(target=dhcp_loop, args=(dhcp_sock,), daemon=True).start()
         print("[DHCP] DHCP Server listening on port 67", flush=True)
 
