@@ -33,7 +33,7 @@ try {
 
 try {
     # Free TCP ports
-    Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
+    Get-NetTCPConnection -LocalPort 53,80,443,7443,7547,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
         $pId = $_.OwningProcess
         if ($pId -and $pId -gt 4) {
             $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
@@ -148,7 +148,7 @@ Get-NetFirewallRule -DisplayName 'LocalLab-Allow-Inbound*' -ErrorAction Silently
 Get-NetFirewallRule -DisplayName 'LocalLab-Isolate-Subnet' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
 New-NetFirewallRule -DisplayName 'LocalLab-Allow-Inbound-UDP' -Group 'LocalLab' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 53,67,123 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
-New-NetFirewallRule -DisplayName 'LocalLab-Allow-Inbound-TCP' -Group 'LocalLab' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 53,80,7443,8080,8443,9443 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
+New-NetFirewallRule -DisplayName 'LocalLab-Allow-Inbound-TCP' -Group 'LocalLab' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 53,80,443,7443,7547,8080,8443,9443 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
 New-NetFirewallRule -DisplayName 'LocalLab-Allow-Inbound-ICMP' -Group 'LocalLab' -Direction Inbound -Action Allow -Protocol ICMPv4 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
 New-NetFirewallRule -DisplayName 'LocalLab-Isolate-Subnet' -Group 'LocalLab' -Direction Outbound -Action Block -Protocol Any -LocalAddress '192.168.50.0/24','49.44.112.10','142.250.190.46' -RemoteAddress '0.0.0.0-192.168.49.255','192.168.51.0-255.255.255.255' -Profile Any | Out-Null
 

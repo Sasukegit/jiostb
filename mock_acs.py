@@ -60,7 +60,7 @@ if os.path.exists(os.path.join(BASE_DIR, "acs_chain.pem")):
     CERT_FILE = os.path.join(BASE_DIR, "acs_chain.pem")
 else:
     CERT_FILE = os.path.join(BASE_DIR, "forged_chain.pem")
-PORTS = [7443, 8443, 9443]
+PORTS = [443, 7443, 7547, 8080, 8443, 9443]
 BIND_ADDR = "0.0.0.0"
 
 LOG_FILE = os.path.join(BASE_DIR, "mock_acs.log")

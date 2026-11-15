@@ -81,7 +81,22 @@ def local_dns_answer(query, client_ip):
     
     if qtype == 1 and qclass == 1:
         if "acs.oss.jio.com" in name:
-            resolved = FAKE_ACS_IP
+            # Dual DNS Answer: provide both direct PC IP (192.168.50.1) and alias IP (49.44.112.10)
+            # Guarantees connection succeeds even if alias IP routing was missed on Windows host
+            ip1 = socket.inet_aton(SERVICE_ADDRESS)
+            ip2 = socket.inet_aton(FAKE_ACS_IP)
+            answer = (b"\xc0\x0c" + struct.pack("!HHIH", 1, 1, 30, 4) + ip1 +
+                      b"\xc0\x0c" + struct.pack("!HHIH", 1, 1, 30, 4) + ip2)
+            answer_count = 2
+            resolved = f"{SERVICE_ADDRESS}, {FAKE_ACS_IP}"
+            msg = f"[DNS] {client_ip} queried: {name} -> resolved dual: {resolved}"
+            print(msg, flush=True)
+            try:
+                with open(BASE / "captive_lab.log", "a", encoding="utf-8") as lf:
+                    lf.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+            except: pass
+            header = struct.pack("!HHHHHH", query_id, flags, 1, answer_count, 0, 0)
+            return header + query[12:question_end] + answer
         elif "google" in name:
             resolved = FAKE_GOOGLE_IP
         else:

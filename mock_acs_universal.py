@@ -75,7 +75,7 @@ if os.path.exists(os.path.join(BASE_DIR, "acs_chain.pem")):
     CERT_FILE = os.path.join(BASE_DIR, "acs_chain.pem")
 else:
     CERT_FILE = os.path.join(BASE_DIR, "forged_chain.pem")
-PORTS = [7443, 8443, 9443]
+PORTS = [443, 7443, 7547, 8080, 8443, 9443]
 BIND_ADDR = "0.0.0.0"
 
 LOG_FILE = os.path.join(BASE_DIR, "mock_acs.log")
@@ -400,6 +400,30 @@ def handle(conn, addr):
                 s.sendall(resp)
                 log(f"{cid} <<< netcheck bypass")
                 log_packet("OUTGOING", cid, "HTTP/1.1 200 OK", resp_headers, nb, note="Network Check Bypass Response")
+                continue
+
+            # ---- JMSC200A / AIRFIBER BOOTSTRAP ACCOUNT REQUEST ----
+            if "request_account" in path:
+                body_resp = b'{"status":"SUCCESS","acsUrl":"https://acs.oss.jio.com:8443/ftacs-digest/ACS"}'
+                date_hdr = get_http_date().encode()
+                resp_headers = {
+                    "Server": "nginx/1.30.1",
+                    "Date": date_hdr.decode(),
+                    "Content-Type": "application/json",
+                    "Content-Length": str(len(body_resp)),
+                    "Connection": "keep-alive"
+                }
+                resp = (
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Server: nginx/1.30.1\r\n"
+                    b"Date: " + date_hdr + b"\r\n"
+                    b"Content-Type: application/json\r\n"
+                    b"Content-Length: " + str(len(body_resp)).encode() + b"\r\n"
+                    b"Connection: keep-alive\r\n\r\n" + body_resp
+                )
+                s.sendall(resp)
+                log(f"{cid} <<< bootstrap account response (acsUrl -> :8443)")
+                log_packet("OUTGOING", cid, "HTTP/1.1 200 OK", resp_headers, body_resp, note="Bootstrap Account Response")
                 continue
             
             # ---- HTTP DIGEST AUTH CHALLENGE (for BlueBank & strict TR-069 CPEs) ----

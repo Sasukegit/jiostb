@@ -35,7 +35,7 @@ try {
 
 try {
     # Free TCP ports
-    Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
+    Get-NetTCPConnection -LocalPort 53,80,443,7443,7547,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
         $pId = $_.OwningProcess
         if ($pId -and $pId -gt 4) {
             $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
@@ -158,7 +158,7 @@ Write-Host "[4/5] Updating Windows Firewall rules for Lab..." -ForegroundColor Y
 Get-NetFirewallRule -DisplayName 'Jio-FOTA-Lab*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 
 New-NetFirewallRule -DisplayName 'Jio-FOTA-Lab-Allow-UDP' -Group 'Jio-FOTA-Lab' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 53,67,123 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
-New-NetFirewallRule -DisplayName 'Jio-FOTA-Lab-Allow-TCP' -Group 'Jio-FOTA-Lab' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 53,80,443,7443,8080,8443,9443 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
+New-NetFirewallRule -DisplayName 'Jio-FOTA-Lab-Allow-TCP' -Group 'Jio-FOTA-Lab' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 53,80,443,7443,7547,8080,8443,9443 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
 New-NetFirewallRule -DisplayName 'Jio-FOTA-Lab-Allow-ICMP' -Group 'Jio-FOTA-Lab' -Direction Inbound -Action Allow -Protocol ICMPv4 -LocalAddress Any -RemoteAddress Any -Profile Any | Out-Null
 
 # 5. Launch Services
