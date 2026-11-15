@@ -10,8 +10,22 @@ Write-Host "==========================================================" -Foregro
 
 # 1. Clean up old processes & ports
 Write-Host "`n[1/4] Cleaning up old processes & freeing ports..." -ForegroundColor Yellow
+Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
+    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($proc.ProcessName -like "*python*") {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+}
 Get-NetTCPConnection -LocalPort 53,80,443,7443,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
-    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
+    if ($proc.ProcessName -like "*python*") {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+}
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+    $_.CommandLine -like "*captive_wifi_lab*" -or $_.CommandLine -like "*mock_acs*" 
+} | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
 # 2. Virtual IP on Hotspot Interface

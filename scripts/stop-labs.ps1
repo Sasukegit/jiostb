@@ -11,6 +11,9 @@ $ports = 53, 67, 80, 443, 7443, 8080, 8443, 9443
 Get-NetTCPConnection -LocalPort $ports -ErrorAction SilentlyContinue | ForEach-Object {
     Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
 }
+Get-NetUDPEndpoint -LocalPort 53, 67, 123 -ErrorAction SilentlyContinue | ForEach-Object {
+    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+}
 
 # 2. Kill python scripts by name
 Get-Process python -ErrorAction SilentlyContinue | Where-Object {

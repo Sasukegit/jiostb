@@ -341,12 +341,34 @@ def main():
     # 1. DNS UDP
     udp_dns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_dns.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    udp_dns.bind(('0.0.0.0', DNS_PORT))
+    try:
+        udp_dns.bind(('0.0.0.0', DNS_PORT))
+    except (PermissionError, OSError) as e:
+        print(f"[!] Warning: Cannot bind 0.0.0.0:{DNS_PORT} ({e}). Retrying on {SERVICE_ADDRESS}:{DNS_PORT}...", flush=True)
+        try:
+            udp_dns.bind((SERVICE_ADDRESS, DNS_PORT))
+            print(f"[+] Fallback successful: Bound UDP DNS directly to {SERVICE_ADDRESS}:{DNS_PORT}", flush=True)
+        except (PermissionError, OSError) as e2:
+            print(f"\n[ERROR] Port {DNS_PORT} (DNS) is blocked or in use by another process!", flush=True)
+            print(f"        Common causes on Windows:", flush=True)
+            print(f"        1. An orphaned python.exe process is still running. Run: taskkill /F /IM python.exe", flush=True)
+            print(f"        2. Windows Mobile Hotspot DNS proxy (SharedAccess). Run: Stop-Service SharedAccess -Force", flush=True)
+            print(f"        3. Another DNS service or VPN is active (Docker, WSL2, AdGuard, etc.).\n", flush=True)
+            sys.exit(1)
     threads.append(threading.Thread(target=udp_dns_loop, args=(udp_dns,), daemon=True))
 
     # 2. DNS TCP
-    dns_tcp = ThreadedDnsTcpServer(('0.0.0.0', DNS_PORT), DnsTcpHandler)
-    threads.append(threading.Thread(target=dns_tcp.serve_forever, daemon=True))
+    dns_tcp = None
+    try:
+        dns_tcp = ThreadedDnsTcpServer(('0.0.0.0', DNS_PORT), DnsTcpHandler)
+    except (PermissionError, OSError) as e:
+        print(f"[!] Warning: Cannot bind TCP 0.0.0.0:{DNS_PORT}. Retrying on {SERVICE_ADDRESS}:{DNS_PORT}...", flush=True)
+        try:
+            dns_tcp = ThreadedDnsTcpServer((SERVICE_ADDRESS, DNS_PORT), DnsTcpHandler)
+        except (PermissionError, OSError):
+            print(f"[!] Warning: TCP DNS on port {DNS_PORT} unavailable. Using UDP DNS only.", flush=True)
+    if dns_tcp:
+        threads.append(threading.Thread(target=dns_tcp.serve_forever, daemon=True))
 
     # 3. NTP UDP
     ntp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
