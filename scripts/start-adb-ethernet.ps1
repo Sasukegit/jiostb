@@ -69,15 +69,17 @@ Stop-Service -Name "SharedAccess" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 
 # Quick Heal / Antivirus Firewall check
-$qhProcesses = Get-Process -Name "*quickheal*", "*qhstat*", "*qhfwsrv*", "*onlinent*", "*qhsvc*", "*sclnt*" -ErrorAction SilentlyContinue
-if ($qhProcesses) {
+$qhProcesses = Get-Process -Name "*quickheal*", "*qh*", "*onlinent*", "*sclnt*" -ErrorAction SilentlyContinue
+$qhServices = Get-Service -Name "*quickheal*", "*qh*" -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Running' }
+if ($qhProcesses -or $qhServices) {
+    $detectedName = if ($qhProcesses) { $qhProcesses[0].ProcessName } else { $qhServices[0].Name }
     Write-Host ""
     Write-Host "==========================================================" -ForegroundColor Yellow
-    Write-Host "[!] Quick Heal Antivirus / Firewall detected ($($qhProcesses[0].ProcessName))" -ForegroundColor Yellow
+    Write-Host "[!] Quick Heal Antivirus / Firewall detected ($detectedName)" -ForegroundColor Yellow
     Write-Host "    Quick Heal blocks Python from binding DNS Port 53 (WinError 10013)." -ForegroundColor Yellow
-    Write-Host "    IF PORT 53 FAILS TO BIND:" -ForegroundColor Cyan
-    Write-Host "    1. Right-click the green Quick Heal icon in the taskbar tray." -ForegroundColor Cyan
-    Write-Host "    2. Click 'Pause Protection' (or disable Firewall for 15 mins)." -ForegroundColor Cyan
+    Write-Host "    TO RESOLVE (2 clicks):" -ForegroundColor Cyan
+    Write-Host "    1. Right-click the green 'Q' Quick Heal icon in the taskbar tray." -ForegroundColor Cyan
+    Write-Host "    2. Click 'Pause Protection' -> Select '15 minutes' (or 30 mins)." -ForegroundColor Cyan
     Write-Host "    3. Re-run this unlock script." -ForegroundColor Cyan
     Write-Host "==========================================================`n" -ForegroundColor Yellow
 }
