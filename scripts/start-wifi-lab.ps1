@@ -23,7 +23,9 @@ Get-NetTCPConnection -LocalPort 53,80,443,7443,8443,9443 -ErrorAction SilentlyCo
     }
 }
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
-    $_.CommandLine -like "*captive_wifi_lab*" -or $_.CommandLine -like "*mock_acs*" 
+    $_.Name -like "*python*" -and 
+    $_.ProcessId -ne $PID -and 
+    ($_.CommandLine -like "*captive_wifi_lab*" -or $_.CommandLine -like "*mock_acs*")
 } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }

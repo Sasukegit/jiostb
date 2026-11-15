@@ -2,33 +2,59 @@
 param(
     [string]$AcsScript = 'mock_acs_universal.py'
 )
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
+if (-not $PSScriptRoot) {
+    $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+}
+if (-not $PSScriptRoot) {
+    $PSScriptRoot = (Get-Location).Path
+}
 $base = Split-Path -Parent $PSScriptRoot
+if (-not $base -or -not (Test-Path $base)) {
+    $base = (Get-Location).Path
+}
 $adapterName = 'Ethernet'
 $labAddress = '192.168.50.1'
 $labPrefix = 24
 
 Write-Host "Cleaning up lingering lab / mock ACS processes..."
-# Free UDP ports (DNS=53, DHCP=67, NTP=123)
-Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
-    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
-    if ($proc.ProcessName -like "*python*") {
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+try {
+    # Free UDP ports (DNS=53, DHCP=67, NTP=123)
+    Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
+        $pId = $_.OwningProcess
+        if ($pId -and $pId -gt 4) {
+            $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ProcessName -like "*python*") {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
-}
-# Free TCP ports
-Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
-    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
-    if ($proc.ProcessName -like "*python*") {
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+} catch {}
+
+try {
+    # Free TCP ports
+    Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
+        $pId = $_.OwningProcess
+        if ($pId -and $pId -gt 4) {
+            $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ProcessName -like "*python*") {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
-}
-# Stop orphaned Python lab instances
-Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
-    $_.CommandLine -like "*captive_lab*" -or $_.CommandLine -like "*mock_acs*" 
-} | ForEach-Object {
-    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-}
+} catch {}
+
+try {
+    # Stop orphaned Python lab instances (strictly filter for python and exclude our own PID)
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+        $_.Name -like "*python*" -and 
+        $_.ProcessId -ne $PID -and 
+        ($_.CommandLine -like "*captive_lab*" -or $_.CommandLine -like "*mock_acs*" -or $_.CommandLine -like "*fota_captive*")
+    } | ForEach-Object {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+} catch {}
+
 if (Test-Path (Join-Path $base 'captive-lab.pid')) {
     $oldPid = Get-Content (Join-Path $base 'captive-lab.pid') -ErrorAction SilentlyContinue
     if ($oldPid) { Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue }
@@ -95,10 +121,10 @@ Get-NetRoute -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -DestinationPr
 Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -ne '127.0.0.1' } | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
 Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Dhcp Disabled
 
-New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $labAddress -PrefixLength $labPrefix | Out-Null
-New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '8.8.8.8' -PrefixLength 32 | Out-Null
-New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '142.250.190.46' -PrefixLength 32 | Out-Null
-New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '49.44.112.10' -PrefixLength 32 | Out-Null
+New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $labAddress -PrefixLength $labPrefix -ErrorAction SilentlyContinue | Out-Null
+New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '8.8.8.8' -PrefixLength 32 -ErrorAction SilentlyContinue | Out-Null
+New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '142.250.190.46' -PrefixLength 32 -ErrorAction SilentlyContinue | Out-Null
+New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '49.44.112.10' -PrefixLength 32 -ErrorAction SilentlyContinue | Out-Null
 Start-Sleep -Seconds 2
 
 Get-NetFirewallRule -DisplayName 'LocalLab-Allow-Inbound*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule

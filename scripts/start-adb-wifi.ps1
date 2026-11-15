@@ -13,9 +13,42 @@ Write-Host "==========================================================" -Foregro
 
 # 1. Clean up lingering lab / mock ACS processes
 Write-Host "`n[1/5] Cleaning up old processes & freeing ports..." -ForegroundColor Yellow
-Get-NetTCPConnection -LocalPort 7443,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
-    Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
-}
+try {
+    # Free UDP ports (DNS=53, DHCP=67, NTP=123)
+    Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
+        $pId = $_.OwningProcess
+        if ($pId -and $pId -gt 4) {
+            $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ProcessName -like "*python*") {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+} catch {}
+
+try {
+    # Free TCP ports
+    Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
+        $pId = $_.OwningProcess
+        if ($pId -and $pId -gt 4) {
+            $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ProcessName -like "*python*") {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+} catch {}
+
+try {
+    # Stop orphaned Python lab instances (strictly filter for python and exclude our own PID)
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+        $_.Name -like "*python*" -and 
+        $_.ProcessId -ne $PID -and 
+        ($_.CommandLine -like "*captive_wifi_lab*" -or $_.CommandLine -like "*mock_acs*")
+    } | ForEach-Object {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+} catch {}
 @('captive-wifi-lab.pid', 'captive-lab.pid') | ForEach-Object {
     $pidFile = Join-Path $base $_
     if (Test-Path $pidFile) {

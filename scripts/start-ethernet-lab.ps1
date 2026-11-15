@@ -1,6 +1,15 @@
 #Requires -RunAsAdministrator
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
+if (-not $PSScriptRoot) {
+    $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+}
+if (-not $PSScriptRoot) {
+    $PSScriptRoot = (Get-Location).Path
+}
 $base = Split-Path -Parent $PSScriptRoot
+if (-not $base -or -not (Test-Path $base)) {
+    $base = (Get-Location).Path
+}
 $adapterName = 'Ethernet'
 $labAddress = '192.168.50.1'
 $labPrefix = 24
@@ -11,26 +20,43 @@ Write-Host "==========================================================" -Foregro
 
 # 1. Clean up old processes & ports
 Write-Host "`n[1/5] Cleaning up old processes & freeing ports..." -ForegroundColor Yellow
-# Free UDP ports (DNS=53, DHCP=67, NTP=123)
-Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
-    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
-    if ($proc.ProcessName -like "*python*") {
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+try {
+    # Free UDP ports (DNS=53, DHCP=67, NTP=123)
+    Get-NetUDPEndpoint -LocalPort 53,67,123 -ErrorAction SilentlyContinue | ForEach-Object {
+        $pId = $_.OwningProcess
+        if ($pId -and $pId -gt 4) {
+            $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ProcessName -like "*python*") {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
-}
-# Free TCP ports
-Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
-    $proc = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
-    if ($proc.ProcessName -like "*python*") {
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+} catch {}
+
+try {
+    # Free TCP ports
+    Get-NetTCPConnection -LocalPort 53,80,443,7443,8080,8443,9443 -ErrorAction SilentlyContinue | ForEach-Object {
+        $pId = $_.OwningProcess
+        if ($pId -and $pId -gt 4) {
+            $proc = Get-Process -Id $pId -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ProcessName -like "*python*") {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
-}
-# Stop orphaned Python lab instances
-Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
-    $_.CommandLine -like "*fota_captive*" -or $_.CommandLine -like "*captive_lab*" -or $_.CommandLine -like "*mock_acs*" 
-} | ForEach-Object {
-    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-}
+} catch {}
+
+try {
+    # Stop orphaned Python lab instances (strictly filter for python and exclude our own PID)
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+        $_.Name -like "*python*" -and 
+        $_.ProcessId -ne $PID -and 
+        ($_.CommandLine -like "*fota_captive*" -or $_.CommandLine -like "*captive_lab*" -or $_.CommandLine -like "*mock_acs*")
+    } | ForEach-Object {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+} catch {}
+
 @('fota-lab.pid', 'captive-lab.pid') | ForEach-Object {
     $pidFile = Join-Path $base $_
     if (Test-Path $pidFile) {
