@@ -66,9 +66,26 @@ try {
     }
 }
 
-# 2. Stop w32time for NTP port 123
+# 2. Stop w32time for NTP port 123 & SharedAccess for DNS port 53
 Write-Host "[2/5] Stopping Windows Time Service (w32time)..." -ForegroundColor Yellow
 Stop-Service w32time -ErrorAction SilentlyContinue
+
+Write-Host "      Stopping Windows Mobile Hotspot / ICS service (SharedAccess)..." -ForegroundColor Yellow
+Stop-Service -Name "SharedAccess" -Force -ErrorAction SilentlyContinue
+
+# Quick Heal / Antivirus Firewall check
+$qhProcesses = Get-Process -Name "*quickheal*", "*qhstat*", "*qhfwsrv*", "*onlinent*", "*qhsvc*", "*sclnt*" -ErrorAction SilentlyContinue
+if ($qhProcesses) {
+    Write-Host ""
+    Write-Host "==========================================================" -ForegroundColor Yellow
+    Write-Host "[!] Quick Heal Antivirus / Firewall detected ($($qhProcesses[0].ProcessName))" -ForegroundColor Yellow
+    Write-Host "    Quick Heal blocks Python from binding DNS Port 53 (WinError 10013)." -ForegroundColor Yellow
+    Write-Host "    IF PORT 53 FAILS TO BIND:" -ForegroundColor Cyan
+    Write-Host "    1. Right-click the green Quick Heal icon in the taskbar tray." -ForegroundColor Cyan
+    Write-Host "    2. Click 'Pause Protection' (or disable Firewall for 15 mins)." -ForegroundColor Cyan
+    Write-Host "    3. Re-run this lab script." -ForegroundColor Cyan
+    Write-Host "==========================================================`n" -ForegroundColor Yellow
+}
 
 # 3. Configure Ethernet Interface (with USB-to-Ethernet support)
 Write-Host "[3/5] Detecting Ethernet / USB-to-Ethernet Adapter..." -ForegroundColor Yellow

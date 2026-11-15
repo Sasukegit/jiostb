@@ -1,6 +1,7 @@
 import base64
 from pathlib import Path
 import os
+import sys
 import socket
 import socketserver
 import struct
@@ -349,11 +350,18 @@ def main():
             udp_dns.bind((SERVICE_ADDRESS, DNS_PORT))
             print(f"[+] Fallback successful: Bound UDP DNS directly to {SERVICE_ADDRESS}:{DNS_PORT}", flush=True)
         except (PermissionError, OSError) as e2:
-            print(f"\n[ERROR] Port {DNS_PORT} (DNS) is blocked or in use by another process!", flush=True)
-            print(f"        Common causes on Windows:", flush=True)
-            print(f"        1. An orphaned python.exe process is still running. Run: taskkill /F /IM python.exe", flush=True)
-            print(f"        2. Windows Mobile Hotspot DNS proxy (SharedAccess). Run: Stop-Service SharedAccess -Force", flush=True)
-            print(f"        3. Another DNS service or VPN is active (Docker, WSL2, AdGuard, etc.).\n", flush=True)
+            print(f"\n==========================================================", flush=True)
+            print(f"[ERROR] Port {DNS_PORT} (DNS) is blocked or in use by another process!", flush=True)
+            print(f"==========================================================", flush=True)
+            print(f"Common causes and fixes on Windows:", flush=True)
+            print(f" 1. Quick Heal / 3rd-Party Antivirus Firewall is blocking Port 53:", flush=True)
+            print(f"    -> Right-click green Quick Heal icon in taskbar tray -> 'Pause Protection' (15 mins)", flush=True)
+            print(f" 2. Windows Mobile Hotspot DNS proxy (SharedAccess) is holding Port 53:", flush=True)
+            print(f"    -> Open Admin PowerShell and run: Stop-Service SharedAccess -Force", flush=True)
+            print(f" 3. An orphaned python.exe process is still running:", flush=True)
+            print(f"    -> Run: taskkill /F /IM python.exe", flush=True)
+            print(f" 4. Another DNS service is running (WSL2, Docker Desktop, AdGuard, etc.).", flush=True)
+            print(f"==========================================================\n", flush=True)
             sys.exit(1)
     threads.append(threading.Thread(target=udp_dns_loop, args=(udp_dns,), daemon=True))
 

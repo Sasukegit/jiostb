@@ -62,6 +62,20 @@ try {
 Write-Host "[2/5] Stopping Windows Time Service (w32time) for Port 123..." -ForegroundColor Yellow
 Stop-Service w32time -ErrorAction SilentlyContinue
 
+# Quick Heal / Antivirus Firewall check
+$qhProcesses = Get-Process -Name "*quickheal*", "*qhstat*", "*qhfwsrv*", "*onlinent*", "*qhsvc*", "*sclnt*" -ErrorAction SilentlyContinue
+if ($qhProcesses) {
+    Write-Host ""
+    Write-Host "==========================================================" -ForegroundColor Yellow
+    Write-Host "[!] Quick Heal Antivirus / Firewall detected ($($qhProcesses[0].ProcessName))" -ForegroundColor Yellow
+    Write-Host "    Quick Heal blocks Python from binding DNS Port 53 (WinError 10013)." -ForegroundColor Yellow
+    Write-Host "    IF PORT 53 FAILS TO BIND:" -ForegroundColor Cyan
+    Write-Host "    1. Right-click the green Quick Heal icon in the taskbar tray." -ForegroundColor Cyan
+    Write-Host "    2. Click 'Pause Protection' (or disable Firewall for 15 mins)." -ForegroundColor Cyan
+    Write-Host "    3. Re-run this Wi-Fi unlock script." -ForegroundColor Cyan
+    Write-Host "==========================================================`n" -ForegroundColor Yellow
+}
+
 # 3. Configure Virtual Hotspot / Hosted Network
 Write-Host "[3/5] Checking Wi-Fi Hotspot configuration..." -ForegroundColor Yellow
 
