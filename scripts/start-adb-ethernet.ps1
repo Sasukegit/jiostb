@@ -158,5 +158,12 @@ $python = (Get-Command python -ErrorAction Stop).Source
 $env:CAPTIVE_BIND_IP = '0.0.0.0'
 Write-Host "Starting Mock ACS Server ($AcsScript)..."
 Start-Process -FilePath (Join-Path $base 'scripts\run-acs-window.bat') -ArgumentList $AcsScript -WorkingDirectory $base
+Write-Host ""
+Write-Host "==========================================================" -ForegroundColor Green
+Write-Host ">>> ACTION: POWER-CYCLE (REBOOT) THE JIO STB NOW! <<<" -ForegroundColor Yellow
+Write-Host "1. Unplug the power cable from the back of the STB." -ForegroundColor Cyan
+Write-Host "2. Connect Ethernet cable between PC and STB." -ForegroundColor Cyan
+Write-Host "3. Plug power back in. The STB TR-069 client only connects on boot!" -ForegroundColor Cyan
+Write-Host "==========================================================`n" -ForegroundColor Green
 Write-Host "Starting isolated captive lab (captive_lab.py) on '$adapterName' at $labAddress"
 & $python (Join-Path $base 'captive_lab.py')

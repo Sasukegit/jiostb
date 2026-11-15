@@ -423,6 +423,7 @@ def main():
         t.start()
 
     print("\n[READY] Wi-Fi Captive Lab is active. Waiting for Jio STB to connect...", flush=True)
+    print(">>> NOW POWER-CYCLE (REBOOT) THE JIO STB: Unplug power from back, wait 5s, plug back in! <<<", flush=True)
     try:
         while any(t.is_alive() for t in threads):
             for t in threads:

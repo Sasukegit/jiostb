@@ -434,7 +434,11 @@ def send_next_task(s, cid, sess):
     log_packet("OUTGOING", cid, "HTTP/1.1 200 OK", resp_headers, resp_xml, note=f"CWMP RPC SetParameterValues [{task['desc']}]")
 
 def handle(conn, addr):
-    cid = f"{addr[0]}:{addr[1]}"
+    try:
+        srv_port = conn.getsockname()[1]
+    except Exception:
+        srv_port = "?"
+    cid = f"{addr[0]}:{addr[1]} [:{srv_port}]"
     log(f"TCP connect from {cid}")
     try:
         s = ctx.wrap_socket(conn, server_side=True)
@@ -442,7 +446,10 @@ def handle(conn, addr):
     except Exception as e:
         log(f"TLS fail {cid}: {type(e).__name__}: {e}")
         if "CERTIFICATE_UNKNOWN" in str(e):
-            log(f"{cid} [!] STB rejected certificate. Ensure 'acs_chain.pem' (RILROOTCA chain) is used, not the legacy forged_chain.pem.")
+            if srv_port in (8443, 9443, 7443, 7547):
+                log(f"{cid} [!] STB TR-069 client rejected certificate. Ensure 'acs_chain.pem' (RILROOTCA chain) is used, not legacy forged_chain.pem.")
+            else:
+                log(f"{cid} (Normal: 3rd-party Android app hit HTTPS port {srv_port}. Waiting for TR-069 on 8443/9443...)")
         try: conn.close()
         except: pass
         return
@@ -744,6 +751,11 @@ def main():
             log("  [+] Mode: ONLINE RELAY with Session Hijack (Auto-Online)")
         else:
             log("  [!] Mode: OFFLINE STANDALONE Local ACS (Auto-Fallback)")
+        log("==========================================================")
+        log("  >>> ACTION REQUIRED: POWER-CYCLE (REBOOT) THE JIO STB NOW <<<")
+        log("  1. Unplug the STB power cable from the back.")
+        log("  2. Wait 5 seconds, then plug it back in.")
+        log("  * The STB TR-069 CWMP client ONLY connects during bootup!")
         log("==========================================================")
         
         threads = []
