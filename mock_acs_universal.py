@@ -201,6 +201,8 @@ def handle(conn, addr):
 
     rf = s.makefile("rb")
     cid = f"{addr[0]}:{addr[1]}"
+    conn_sess = None
+    has_challenged = False
     try:
         while True:
             req = read_http(rf)
@@ -212,8 +214,9 @@ def handle(conn, addr):
             path = reqline.split(" ")[1] if len(reqline.split(" ")) > 1 else ""
             body_str = body.decode('utf-8', errors='ignore')
             cookie = parse_cookie(headers)
+            has_auth = "authorization" in headers
             
-            log(f"{cid} >>> {reqline} clen={len(body)} cookie={cookie or 'NONE'}")
+            log(f"{cid} >>> {reqline} clen={len(body)} cookie={cookie or 'NONE'}{' [AUTH]' if has_auth else ''}")
             
             # ---- NETWORK CHECK BYPASS ----
             if "network/check" in path:
@@ -228,24 +231,44 @@ def handle(conn, addr):
                 log(f"{cid} <<< netcheck bypass")
                 continue
             
+            # ---- HTTP DIGEST AUTH CHALLENGE (for BlueBank & strict TR-069 CPEs) ----
+            # Strict TR-069 CPEs (such as Bluebank / Franklin) require the ACS to challenge with 401 Digest.
+            # If 200 OK is returned to an unauthenticated Inform, the CPE drops the session and loops.
+            if not has_auth and not has_challenged and ("cwmp:Inform" in body_str or len(body) > 0):
+                has_challenged = True
+                nonce = uuid.uuid4().hex[:16]
+                challenge_resp = (
+                    b"HTTP/1.1 401 Unauthorized\r\n"
+                    b'WWW-Authenticate: Digest realm="CPEDigestLogin", domain="/ftacs-digest/ACS", qop="auth", nonce="' + nonce.encode() + b'", algorithm=MD5\r\n'
+                    b"Content-Length: 0\r\n"
+                    b"Server: GenieACS/1.2.13\r\n"
+                    b"Connection: keep-alive\r\n\r\n"
+                )
+                s.sendall(challenge_resp)
+                log(f"{cid} <<< 401 Digest Challenge (realm=CPEDigestLogin, nonce={nonce[:8]}...)")
+                continue
+
             # ---- CWMP: INFORM ----
             if "cwmp:Inform" in body_str:
                 m = re.search(r'<cwmp:ID[^>]*>([^<]+)</cwmp:ID>', body_str)
                 req_id = m.group(1).strip() if m else "0"
                 
-                # Check device model in Inform for logging
-                model_m = re.search(r'<ModelName[^>]*>([^<]+)</ModelName>', body_str)
+                # Check device model in Inform for logging (support both ProductClass and ModelName)
+                model_m = re.search(r'<(?:ProductClass|ModelName)[^>]*>([^<]+)</(?:ProductClass|ModelName)>', body_str)
                 mfr_m = re.search(r'<Manufacturer[^>]*>([^<]+)</Manufacturer>', body_str)
                 dev_info = f"Model={model_m.group(1) if model_m else '?'} Mfr={mfr_m.group(1) if mfr_m else '?'}"
                 log(f"{cid} [INFORM] Device Info: {dev_info}")
+                if has_auth:
+                    log(f"{cid} [AUTH] Client authenticated via HTTP Digest")
                 
                 session_id = uuid.uuid4().hex[:16]
+                conn_sess = {
+                    "tasks": init_task_queue(),
+                    "current": None,
+                    "adb_unlocked": False
+                }
                 with SESSIONS_LOCK:
-                    SESSIONS[session_id] = {
-                        "tasks": init_task_queue(),
-                        "current": None,
-                        "adb_unlocked": False
-                    }
+                    SESSIONS[session_id] = conn_sess
                 
                 resp_xml = INFORM_RESPONSE_TEMPLATE.format(ID=req_id).encode()
                 http_resp = (
@@ -262,9 +285,9 @@ def handle(conn, addr):
                 continue
             
             # ---- CWMP: STATE MACHINE ----
-            if cookie and cookie in SESSIONS:
-                sess = SESSIONS[cookie]
-                
+            # Match session: by Cookie (SDMC style) OR by connection session (BlueBank style)
+            sess = SESSIONS.get(cookie) if cookie else conn_sess
+            if sess:
                 # Empty POST from CPE indicates ACS turn
                 if len(body) == 0:
                     send_next_task(s, cid, sess)
