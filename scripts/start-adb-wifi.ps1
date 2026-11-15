@@ -128,7 +128,7 @@ $python = (Get-Command python -ErrorAction Stop).Source
 $env:CAPTIVE_BIND_IP = '0.0.0.0'
 
 # Start selected mock ACS script in a separate console window so logs are clearly visible
-Start-Process -FilePath $python -ArgumentList (Join-Path $base $AcsScript) -WorkingDirectory $base
+Start-Process cmd.exe -ArgumentList "/k `"$python`" `"$AcsScript`"" -WorkingDirectory $base
 
 Write-Host "`n>>> Starting captive_wifi_lab.py..." -ForegroundColor Cyan
 & $python (Join-Path $base 'captive_wifi_lab.py')

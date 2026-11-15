@@ -7,12 +7,22 @@ import re
 import base64
 import uuid
 import hashlib
+import http.client
+import traceback
+import sys
 
 # ==============================================================================
-# JIO STB UNIVERSAL MOCK ACS SERVER
-# Supports:
-#   - BlueBank / JHS Series (JHSD200, JHSC200, JHSB200) via HTTP Digest Auth
-#   - SDMC / Skyworth Series (JMSC200A, JMSB200A, C200A ohm) via Direct Inform
+# JIO STB UNIVERSAL MOCK ACS SERVER (DUAL-VARIANT: RELAY + OFFLINE STANDALONE)
+#
+# Architecture:
+#   Variant 1 (Online Relay with Session Hijack):
+#     Relays the initial CWMP handshake (Inform -> 401 -> Auth Inform -> 200 InformResponse)
+#     to/from Real Jio ACS (49.40.134.113:8443) using genuine Undertow nonces.
+#     At the first Empty POST -> HIJACKS session and pushes local ADB unlock commands.
+#
+#   Variant 2 (Offline Standalone Auto-Fallback):
+#     If upstream Real Jio ACS is unreachable or offline, automatically falls back
+#     to 100% local mock ACS using the verified MD5 realm hash (opaque=145074cc...).
 # ==============================================================================
 
 # --- Netcheck Bypass ---
@@ -70,6 +80,16 @@ PACKET_LOG_FILE = os.path.join(BASE_DIR, "mock_acs_packets.log")
 # Real Jio ACS (nginx/1.30.1 + Undertow) sets opaque = MD5("CPEDigestLogin")
 REALM = "CPEDigestLogin"
 OPAQUE = "145074cc9f9b8670f412d297d1d11274"  # MD5("CPEDigestLogin")
+
+# Real Jio ACS Upstream Details (for Relay Mode)
+REAL_ACS_HOST = "acs.oss.jio.com"
+REAL_ACS_PORT = 8443
+REAL_ACS_IP = "49.40.134.113"
+
+UPSTREAM_ONLINE = False
+upstream_ctx = ssl._create_unverified_context()
+try: upstream_ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+except Exception: pass
 
 SESSIONS = {}
 SESSIONS_LOCK = threading.Lock()
@@ -130,6 +150,30 @@ def log_packet(direction, cid, line, headers, body=None, note=""):
                 pf.write(log_text)
         except Exception:
             pass
+
+def test_upstream_connectivity(timeout=2.0):
+    """Test if Real Jio ACS is reachable over the active network connection."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((REAL_ACS_IP, REAL_ACS_PORT))
+        s.close()
+        return True
+    except Exception:
+        return False
+
+def forward_to_real_acs(method, path, headers, body, timeout=4.0):
+    """Forward an HTTP request to the Real Jio ACS server."""
+    forward_headers = {k: v for k, v in headers.items() if k not in ("host", "connection", "content-length")}
+    forward_headers["host"] = REAL_ACS_HOST
+    forward_headers["content-length"] = str(len(body))
+    forward_headers["connection"] = "keep-alive"
+    
+    conn = http.client.HTTPSConnection(REAL_ACS_IP, REAL_ACS_PORT, context=upstream_ctx, timeout=timeout)
+    conn.request(method, path, body=body, headers=forward_headers)
+    resp = conn.getresponse()
+    resp_body = resp.read()
+    return resp.status, resp.reason, resp.getheaders(), resp_body
 
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ctx.load_cert_chain(CERT_FILE)
@@ -198,7 +242,7 @@ def extract_fault(body_str):
 
 def init_task_queue():
     return [
-        # Stage 1: The primary goal - Enable USB/Network Debugging (alone, so no other param can cause atomic rejection)
+        # Stage 1: The primary goal - Enable USB/Network Debugging
         {
             "desc": "Enable USBDebugging (Device.JioSTB)",
             "params": [("Device.JioSTB.USB.USBDebugging", "xsd:boolean", "true")],
@@ -209,7 +253,7 @@ def init_task_queue():
                 "is_adb": True,
             }
         },
-        # Stage 2: Set Validity Date to 2037 (correct parameter name: DebugValidityDate)
+        # Stage 2: Set Validity Date to 2037
         {
             "desc": "Set DebugValidityDate to 2037 (Device.JioSTB)",
             "params": [("Device.JioSTB.USB.DebugValidityDate", "xsd:dateTime", "2037-12-31T23:59:59.000Z")],
@@ -220,7 +264,7 @@ def init_task_queue():
                 "is_adb": False,
             }
         },
-        # Stage 3: Enable FOTA Downgrade (Supported on both SDMC and Droidlogic)
+        # Stage 3: Enable FOTA Downgrade
         {
             "desc": "Enable FOTA Downgrade",
             "params": [
@@ -237,7 +281,7 @@ def init_task_queue():
                 "is_adb": False,
             }
         },
-        # Stage 4: Disable FOTA (Supported on Droidlogic/JHSD200; SDMC/JHSC200 disables FOTA via ADB)
+        # Stage 4: Disable FOTA
         {
             "desc": "Disable FOTA (Device.JioSTB)",
             "params": [
@@ -256,7 +300,6 @@ def init_task_queue():
 
 def send_next_task(s, cid, sess):
     if not sess["tasks"]:
-        # All tasks done! Gracefully end session with 204
         date_hdr = get_http_date().encode()
         resp_headers = {
             "Server": "nginx/1.30.1",
@@ -355,56 +398,71 @@ def handle(conn, addr):
                 continue
             
             # ---- HTTP DIGEST AUTH CHALLENGE (for BlueBank & strict TR-069 CPEs) ----
-            # Strict TR-069 CPEs (such as Bluebank JHSD200) require the ACS to challenge with 401 Digest.
-            # Real Jio ACS returns:
-            # HTTP/1.1 401 Unauthorized
-            # Server: nginx/1.30.1
-            # Content-Type: text/html;charset=UTF-8
-            # Content-Length: 71
-            # WWW-Authenticate: Digest realm="CPEDigestLogin", qop="auth", nonce="...", opaque="145074cc9f9b8670f412d297d1d11274"
-            # Set-Cookie: JSESSIONID=...; path=/
             is_bluebank = any(b in body_str.lower() for b in ["bluebank", "jhsd", "jhsc", "jhsb", "iwedia"])
             
             if not has_auth and not has_challenged and is_bluebank and ("cwmp:Inform" in body_str or len(body) > 0):
                 has_challenged = True
-                nonce = str(uuid.uuid4())
-                jsession = uuid.uuid4().hex + ".nvmbdprv126605"
-                body_401 = b"<html><head><title>Error</title></head><body>Unauthorized</body></html>"
-                date_hdr = get_http_date().encode()
+                relayed_401 = False
                 
-                resp_headers = {
-                    "Server": "nginx/1.30.1",
-                    "Date": date_hdr.decode(),
-                    "Content-Type": "text/html;charset=UTF-8",
-                    "Content-Length": str(len(body_401)),
-                    "Connection": "keep-alive",
-                    "WWW-Authenticate": f'Digest realm="{REALM}", qop="auth", nonce="{nonce}", opaque="{OPAQUE}"',
-                    "X-Powered-By": "Undertow/3",
-                    "Set-Cookie": f"JSESSIONID={jsession}; path=/"
-                }
-                challenge_resp = (
-                    b"HTTP/1.1 401 Unauthorized\r\n"
-                    b"Server: nginx/1.30.1\r\n"
-                    b"Date: " + date_hdr + b"\r\n"
-                    b"Content-Type: text/html;charset=UTF-8\r\n"
-                    b"Content-Length: " + str(len(body_401)).encode() + b"\r\n"
-                    b"Connection: keep-alive\r\n"
-                    b'WWW-Authenticate: Digest realm="' + REALM.encode() + b'", qop="auth", nonce="' + nonce.encode() + b'", opaque="' + OPAQUE.encode() + b'"\r\n'
-                    b"X-Powered-By: Undertow/3\r\n"
-                    b"Set-Cookie: JSESSIONID=" + jsession.encode() + b"; path=/\r\n\r\n"
-                    + body_401
-                )
-                s.sendall(challenge_resp)
-                log(f"{cid} <<< 401 Digest Challenge (realm={REALM}, nonce={nonce[:8]}..., opaque={OPAQUE[:8]}...)")
-                log_packet("OUTGOING", cid, "HTTP/1.1 401 Unauthorized", resp_headers, body_401, note="401 Digest Challenge to BlueBank STB")
-                continue
+                # VARIANT 1: Try Relay from Real Jio ACS if online
+                if UPSTREAM_ONLINE:
+                    try:
+                        log(f"{cid} [RELAY] Forwarding Inform to Real Jio ACS for genuine 401 challenge...")
+                        status, reason, resp_headers_list, resp_body = forward_to_real_acs("POST", path, headers, body)
+                        if status == 401:
+                            out = [f"HTTP/1.1 {status} {reason}"]
+                            for k, v in resp_headers_list:
+                                if k.lower() in ("transfer-encoding", "connection"): continue
+                                out.append(f"{k}: {v}")
+                            out.append(f"Content-Length: {len(resp_body)}")
+                            out.append("Connection: keep-alive")
+                            challenge_resp = ("\r\n".join(out) + "\r\n\r\n").encode("latin1") + resp_body
+                            s.sendall(challenge_resp)
+                            log(f"{cid} <<< [RELAY] Relayed authentic 401 Digest Challenge from Real Jio ACS")
+                            log_packet("OUTGOING", cid, f"HTTP/1.1 {status} {reason}", dict(resp_headers_list), resp_body, note="Relayed 401 Challenge from Real ACS")
+                            relayed_401 = True
+                            continue
+                    except Exception as e:
+                        log(f"{cid} [WARN] Upstream relay failed ({e}), falling back to local 401 challenge")
+                
+                # VARIANT 2: Offline Standalone Fallback with verified MD5 hash
+                if not relayed_401:
+                    nonce = str(uuid.uuid4())
+                    jsession = uuid.uuid4().hex + ".nvmbdprv126605"
+                    body_401 = b"<html><head><title>Error</title></head><body>Unauthorized</body></html>"
+                    date_hdr = get_http_date().encode()
+                    resp_headers = {
+                        "Server": "nginx/1.30.1",
+                        "Date": date_hdr.decode(),
+                        "Content-Type": "text/html;charset=UTF-8",
+                        "Content-Length": str(len(body_401)),
+                        "Connection": "keep-alive",
+                        "WWW-Authenticate": f'Digest realm="{REALM}", qop="auth", nonce="{nonce}", opaque="{OPAQUE}"',
+                        "X-Powered-By": "Undertow/3",
+                        "Set-Cookie": f"JSESSIONID={jsession}; path=/"
+                    }
+                    challenge_resp = (
+                        b"HTTP/1.1 401 Unauthorized\r\n"
+                        b"Server: nginx/1.30.1\r\n"
+                        b"Date: " + date_hdr + b"\r\n"
+                        b"Content-Type: text/html;charset=UTF-8\r\n"
+                        b"Content-Length: " + str(len(body_401)).encode() + b"\r\n"
+                        b"Connection: keep-alive\r\n"
+                        b'WWW-Authenticate: Digest realm="' + REALM.encode() + b'", qop="auth", nonce="' + nonce.encode() + b'", opaque="' + OPAQUE.encode() + b'"\r\n'
+                        b"X-Powered-By: Undertow/3\r\n"
+                        b"Set-Cookie: JSESSIONID=" + jsession.encode() + b"; path=/\r\n\r\n"
+                        + body_401
+                    )
+                    s.sendall(challenge_resp)
+                    log(f"{cid} <<< [OFFLINE] 401 Digest Challenge (realm={REALM}, nonce={nonce[:8]}..., opaque={OPAQUE[:8]}...)")
+                    log_packet("OUTGOING", cid, "HTTP/1.1 401 Unauthorized", resp_headers, body_401, note="Local Standalone 401 Challenge (Fallback)")
+                    continue
 
             # ---- CWMP: INFORM ----
             if "cwmp:Inform" in body_str:
                 m = re.search(r'<cwmp:ID[^>]*>([^<]+)</cwmp:ID>', body_str)
                 req_id = m.group(1).strip() if m else "0"
                 
-                # Check device model in Inform for logging
                 dev_meta = extract_device_info(body_str)
                 dev_desc = " ".join([f"{k}={v}" for k, v in dev_meta.items() if v]) or "Unknown"
                 log(f"{cid} [INFORM] Device Info: {dev_desc}")
@@ -429,36 +487,61 @@ def handle(conn, addr):
                     if cookie:
                         SESSIONS[cookie] = conn_sess
                 
-                resp_xml = INFORM_RESPONSE_TEMPLATE.format(ID=req_id).encode("utf-8")
-                date_hdr = get_http_date().encode()
-                resp_headers = {
-                    "Server": "nginx/1.30.1",
-                    "Date": date_hdr.decode(),
-                    "Content-Type": "text/xml; charset=utf-8",
-                    "Content-Length": str(len(resp_xml)),
-                    "Set-Cookie": f"JSESSIONID={jsession_cookie}; path=/",
-                    "Connection": "keep-alive"
-                }
-                http_resp = (
-                    b"HTTP/1.1 200 OK\r\n"
-                    b"Server: nginx/1.30.1\r\n"
-                    b"Date: " + date_hdr + b"\r\n"
-                    b"Content-Type: text/xml; charset=utf-8\r\n"
-                    b"Content-Length: " + str(len(resp_xml)).encode() + b"\r\n"
-                    b"Set-Cookie: JSESSIONID=" + jsession_cookie.encode() + b"; path=/\r\n"
-                    b"Connection: keep-alive\r\n\r\n" + resp_xml
-                )
-                s.sendall(http_resp)
-                log(f"{cid} <<< InformResponse [cookie={jsession_cookie[:16]}...]")
-                log_packet("OUTGOING", cid, "HTTP/1.1 200 OK", resp_headers, resp_xml, note="CWMP InformResponse")
-                continue
+                relayed_inform = False
+                # VARIANT 1: Try Upstream Inform Relay if online and authenticated
+                if UPSTREAM_ONLINE and has_auth:
+                    try:
+                        log(f"{cid} [RELAY] Forwarding authenticated Inform to Real Jio ACS...")
+                        status, reason, resp_headers_list, resp_body = forward_to_real_acs("POST", path, headers, body)
+                        if status == 200:
+                            out = [f"HTTP/1.1 {status} {reason}"]
+                            for k, v in resp_headers_list:
+                                if k.lower() in ("transfer-encoding", "connection"): continue
+                                out.append(f"{k}: {v}")
+                            out.append(f"Content-Length: {len(resp_body)}")
+                            out.append("Connection: keep-alive")
+                            s.sendall(("\r\n".join(out) + "\r\n\r\n").encode("latin1") + resp_body)
+                            log(f"{cid} <<< [RELAY] Relayed authentic 200 OK InformResponse from Real Jio ACS")
+                            log_packet("OUTGOING", cid, f"HTTP/1.1 {status} {reason}", dict(resp_headers_list), resp_body, note="Relayed InformResponse from Real ACS")
+                            relayed_inform = True
+                            continue
+                    except Exception as e:
+                        log(f"{cid} [WARN] Upstream Inform relay failed ({e}), using local InformResponse fallback")
+                
+                # VARIANT 2: Offline Standalone InformResponse
+                if not relayed_inform:
+                    resp_xml = INFORM_RESPONSE_TEMPLATE.format(ID=req_id).encode("utf-8")
+                    date_hdr = get_http_date().encode()
+                    resp_headers = {
+                        "Server": "nginx/1.30.1",
+                        "Date": date_hdr.decode(),
+                        "Content-Type": "text/xml; charset=utf-8",
+                        "Content-Length": str(len(resp_xml)),
+                        "Set-Cookie": f"JSESSIONID={jsession_cookie}; path=/",
+                        "Connection": "keep-alive"
+                    }
+                    http_resp = (
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Server: nginx/1.30.1\r\n"
+                        b"Date: " + date_hdr + b"\r\n"
+                        b"Content-Type: text/xml; charset=utf-8\r\n"
+                        b"Content-Length: " + str(len(resp_xml)).encode() + b"\r\n"
+                        b"Set-Cookie: JSESSIONID=" + jsession_cookie.encode() + b"; path=/\r\n"
+                        b"Connection: keep-alive\r\n\r\n" + resp_xml
+                    )
+                    s.sendall(http_resp)
+                    log(f"{cid} <<< [OFFLINE] InformResponse [cookie={jsession_cookie[:16]}...]")
+                    log_packet("OUTGOING", cid, "HTTP/1.1 200 OK", resp_headers, resp_xml, note="Local Standalone InformResponse")
+                    continue
             
-            # ---- CWMP: STATE MACHINE ----
+            # ---- CWMP: STATE MACHINE & SESSION HIJACK ----
             # Match session: by Cookie (SDMC style) OR by connection session (BlueBank style)
             sess = SESSIONS.get(cookie) if cookie else conn_sess
             if sess:
-                # Empty POST from CPE indicates ACS turn
+                # Empty POST from CPE indicates ACS turn -> HIJACK POINT!
+                # Even if handshake was relayed from Real ACS, we drop Real ACS here and inject our local ADB unlock commands!
                 if len(body) == 0:
+                    log(f"{cid} [HIJACK POINT] STB ready for commands -> Injecting local SetParameterValues (USBDebugging=true)")
                     send_next_task(s, cid, sess)
                     continue
                 
@@ -514,32 +597,56 @@ def handle(conn, addr):
         except: pass
 
 def serve_port(port):
-    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind((BIND_ADDR, port))
-    srv.listen(64)
-    log(f"### listening on {BIND_ADDR}:{port} ###")
-    while True:
-        try:
-            conn, addr = srv.accept()
-            threading.Thread(target=handle, args=(conn, addr), daemon=True).start()
-        except Exception as e:
-            log(f"accept error on port {port}: {e}")
+    try:
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind((BIND_ADDR, port))
+        srv.listen(64)
+        log(f"### listening on {BIND_ADDR}:{port} ###")
+        while True:
+            try:
+                conn, addr = srv.accept()
+                threading.Thread(target=handle, args=(conn, addr), daemon=True).start()
+            except Exception as e:
+                log(f"accept error on port {port}: {e}")
+    except Exception as e:
+        log(f"[ERROR] Could not bind port {port}: {e}")
 
 def main():
-    log("==========================================================")
-    log("  Jio STB Universal Standalone Mock ACS Engine             ")
-    log("  Models: BlueBank (JHSD200/JMSB200A) + SDMC (JMSC200A)   ")
-    log(f"  Packet Log: {PACKET_LOG_FILE}")
-    log("==========================================================")
-    for p in PORTS:
-        threading.Thread(target=serve_port, args=(p,), daemon=True).start()
-    
+    global UPSTREAM_ONLINE
     try:
+        log("==========================================================")
+        log("  Jio STB Universal Mock ACS (Relay + Standalone Dual)    ")
+        log(f"  Packet Log: {PACKET_LOG_FILE}")
+        
+        # Test upstream connectivity to Real Jio ACS
+        log("  Checking upstream connectivity to Real Jio ACS (49.40.134.113:8443)...")
+        UPSTREAM_ONLINE = test_upstream_connectivity(timeout=1.5)
+        if UPSTREAM_ONLINE:
+            log("  [+] Mode: ONLINE RELAY with Session Hijack (Auto-Online)")
+        else:
+            log("  [!] Mode: OFFLINE STANDALONE Local ACS (Auto-Fallback)")
+        log("==========================================================")
+        
+        threads = []
+        for p in PORTS:
+            t = threading.Thread(target=serve_port, args=(p,), daemon=True)
+            t.start()
+            threads.append(t)
+        
         while True:
             threading.Event().wait(1.0)
+            
     except KeyboardInterrupt:
-        log("Mock ACS stopped.")
+        log("Mock ACS stopped by user.")
+    except Exception as e:
+        err_msg = f"[FATAL CRASH] {type(e).__name__}: {e}\n{traceback.format_exc()}"
+        log(err_msg)
+        print("\n" + err_msg)
+        try:
+            input("\nPress Enter to exit...")
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     main()

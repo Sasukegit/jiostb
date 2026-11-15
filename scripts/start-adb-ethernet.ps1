@@ -138,6 +138,6 @@ New-NetFirewallRule -DisplayName 'LocalLab-Isolate-Subnet' -Group 'LocalLab' -Di
 $python = (Get-Command python -ErrorAction Stop).Source
 $env:CAPTIVE_BIND_IP = '0.0.0.0'
 Write-Host "Starting Mock ACS Server ($AcsScript)..."
-Start-Process -FilePath $python -ArgumentList (Join-Path $base $AcsScript) -WorkingDirectory $base
+Start-Process cmd.exe -ArgumentList "/k `"$python`" `"$AcsScript`"" -WorkingDirectory $base
 Write-Host "Starting isolated captive lab (captive_lab.py) on '$adapterName' at $labAddress"
 & $python (Join-Path $base 'captive_lab.py')
